@@ -77,9 +77,12 @@
         <button id="btn-salir" type="button" class="btn btn-claro !py-1.5 text-sm">Salir</button>
       </div>
     </div>
-    <!-- Barra de navegación (se llena por JS según el rol) -->
-    <nav id="navbar" class="hidden border-t border-white/10 bg-navy-700" aria-label="Módulos">
-      <div id="navbar-items" class="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2"></div>
+    <!-- Barra para volver al menú principal (visible dentro de cada módulo) -->
+    <nav id="navbar" class="hidden border-t border-white/10 bg-navy-700" aria-label="Navegación">
+      <div id="navbar-items" class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2">
+        <button id="btn-menu" type="button" class="rounded-lg px-3 py-2 text-sm font-semibold text-white hover:bg-white/10">← Menú principal</button>
+        <span id="nav-titulo" class="text-sm font-semibold text-white/70"></span>
+      </div>
     </nav>
   </header>
 
@@ -110,18 +113,33 @@
     <!-- ---------- APLICACIÓN (tras iniciar sesión) ---------- -->
     <div id="vista-app" class="hidden">
 
+      <!-- MENÚ PRINCIPAL (aparece después de iniciar sesión; los botones se generan según el rol) -->
+      <section id="vista-menu" class="hidden">
+        <div class="mx-auto max-w-3xl">
+          <h2 class="text-xl font-bold">Menú principal</h2>
+          <p class="mt-1 text-sm text-slate-700">Selecciona el módulo con el que vas a trabajar.</p>
+          <div id="menu-botones" class="mt-5 grid gap-4 sm:grid-cols-2"></div>
+        </div>
+      </section>
+
       <!-- MÓDULO 1: REGISTRO, VENTA E INSCRIPCIÓN -->
       <section id="mod-registro" class="modulo hidden">
         <div class="tarjeta mx-auto max-w-3xl">
-          <h2 class="text-xl font-bold">Registro, venta e inscripción</h2>
-          <p class="mt-1 text-sm text-slate-700">Cada número de corredor solo puede venderse una vez.</p>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-xl font-bold">Registro, venta e inscripción</h2>
+              <p class="mt-1 text-sm text-slate-700">Cada número de corredor solo puede venderse una vez.</p>
+            </div>
+            <!-- Despliega el panel de búsqueda y modificación (solo admin / umgpb) -->
+            <button id="btn-toggle-modificar" type="button" class="btn btn-claro hidden shrink-0" aria-expanded="false" aria-controls="panel-modificar">Buscar y modificar</button>
+          </div>
           <form id="form-registro" class="mt-5 grid gap-4 sm:grid-cols-2" novalidate>
             <div class="sm:col-span-2">
               <label for="reg-nombre" class="etiqueta">Nombre completo</label>
               <input id="reg-nombre" type="text" class="campo" autocomplete="off" required>
             </div>
             <div>
-              <label for="reg-dorsal" class="etiqueta">No. Corredor (dorsal físico)</label>
+              <label for="reg-dorsal" class="etiqueta">No. Corredor (dorsal físico, ej. 001)</label>
               <input id="reg-dorsal" type="text" inputmode="numeric" class="campo cifras" autocomplete="off" required>
             </div>
             <div>
@@ -152,6 +170,16 @@
             </div>
           </form>
         </div>
+
+        <!-- Panel desplegable: búsqueda y modificación de datos -->
+        <div id="panel-modificar" class="tarjeta mx-auto mt-5 hidden max-w-3xl">
+          <h3 class="text-lg font-bold">Búsqueda y modificación de datos</h3>
+          <p class="mt-1 text-sm text-slate-700">Busca al corredor (por nombre o número, con o sin ceros), selecciónalo y presiona Modificar.</p>
+          <label for="mod-buscar" class="etiqueta mt-4">Buscar por nombre completo o No. Corredor</label>
+          <input id="mod-buscar" type="search" class="campo" autocomplete="off">
+          <div id="mod-resultados" class="mt-4 space-y-3"></div>
+          <button id="btn-modificar" type="button" class="btn btn-navy mt-4" disabled>Modificar</button>
+        </div>
       </section>
 
       <!-- MÓDULO 2: ENTREGA DE KITS -->
@@ -161,18 +189,6 @@
           <label for="kit-buscar" class="etiqueta mt-4">Buscar por nombre completo o No. Corredor</label>
           <input id="kit-buscar" type="search" class="campo" placeholder="Ej. 125 o María López" autocomplete="off">
           <div id="kit-resultados" class="mt-4 space-y-3"></div>
-        </div>
-      </section>
-
-      <!-- MÓDULO 3: BÚSQUEDA Y MODIFICACIÓN -->
-      <section id="mod-modificar" class="modulo hidden">
-        <div class="tarjeta mx-auto max-w-3xl">
-          <h2 class="text-xl font-bold">Búsqueda y modificación de datos</h2>
-          <p class="mt-1 text-sm text-slate-700">Busca al corredor, selecciónalo y presiona Modificar.</p>
-          <label for="mod-buscar" class="etiqueta mt-4">Buscar por nombre completo o No. Corredor</label>
-          <input id="mod-buscar" type="search" class="campo" autocomplete="off">
-          <div id="mod-resultados" class="mt-4 space-y-3"></div>
-          <button id="btn-modificar" type="button" class="btn btn-navy mt-4" disabled>Modificar</button>
         </div>
       </section>
 
@@ -346,10 +362,10 @@
  *  Aquí NO hay contraseñas ni datos sensibles: la validación ocurre en el servidor.
  * ============================================================================= */
 
-/* ------------------------------ URACIÓN ------------------------------ */
+/* ------------------------------ CONFIGURACIÓN ------------------------------ */
 const CONFIG = {
   // *** PEGA AQUÍ la URL de tu implementación de Apps Script (termina en /exec) ***
-  API_URL: 'https://script.google.com/macros/s/AKfycbwwwl-KITEzHYFfKF4f4_IBMZ8Ft-RyHyu9VwEcDH3xKNDlKuoa3k52yLsf463GSk0u/exec',
+  API_URL: 'https://script.google.com/macros/s/PEGAR_AQUI_TU_ID_DE_IMPLEMENTACION/exec',
   TIMEOUT_MS: 30000,          // tiempo máximo de espera por petición
   CICLO_META_MS: 5000,        // cada cuánto se reintenta enviar lo pendiente en meta
   REFRESCO_META_MS: 15000,    // cada cuánto se actualiza la tabla de últimos 5
@@ -627,37 +643,58 @@ async function iniciarApp() {
   $('usuario-nombre').textContent = estado.nombre;
   $('usuario-detalle').textContent = `${estado.facultad || '—'} · ${estado.rol}`;
 
-  // Menú: solo los módulos permitidos para el rol
-  $('navbar').classList.remove('hidden');
-  $('navbar-items').innerHTML = estado.modulos.map((m) =>
-    `<button type="button" data-modulo="${m}" class="nav-btn whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10">${esc(MODULOS[m].etiqueta)}</button>`).join('');
-
   cargarCola();
   cargarLogoParaPdf();
   if (estado.modulos.includes('registro') || estado.modulos.includes('modificar')) await cargarListas();
-  if (estado.modulos.length) mostrarModulo(estado.modulos[0]);
+  // 'modificar' no es un botón del menú: se despliega dentro de Registro y venta
+  const deMenu = estado.modulos.filter((m) => m !== 'modificar');
+  if (deMenu.length === 1) mostrarModulo(deMenu[0]); // rol con un solo módulo: se abre directo
+  else mostrarModulo('menu');
 }
-$('navbar-items').addEventListener('click', (e) => {
+
+/** Botones del menú principal (clic en una opción abre el módulo). */
+$('menu-botones').addEventListener('click', (e) => {
   const b = e.target.closest('[data-modulo]');
   if (b) mostrarModulo(b.dataset.modulo);
 });
+/** Botón "← Menú principal" de la barra superior. */
+$('btn-menu').addEventListener('click', () => mostrarModulo('menu'));
+
+/** Dibuja los botones del menú según los módulos permitidos al rol (orden fijo). */
+function renderMenu() {
+  const descripciones = {
+    registro: 'Inscribir corredores, vender números y corregir datos.',
+    kit: 'Buscar corredores y registrar la entrega del kit.',
+    reportes: 'Listados, exportación a PDF o Excel y resumen de la carrera.',
+    meta: 'Iniciar la carrera y registrar las llegadas.'
+  };
+  const orden = ['registro', 'kit', 'reportes', 'meta'].filter((m) => estado.modulos.includes(m));
+  $('menu-botones').innerHTML = orden.length
+    ? orden.map((m) => `
+      <button type="button" data-modulo="${m}" class="tarjeta text-left transition hover:shadow-md hover:ring-navy focus:outline-none focus:ring-2 focus:ring-navy">
+        <span class="block text-lg font-bold">${esc(MODULOS[m].etiqueta)}</span>
+        <span class="mt-1 block text-sm text-slate-700">${esc(descripciones[m])}</span>
+      </button>`).join('')
+    : '<p class="tarjeta text-sm">Tu usuario no tiene módulos habilitados. Contacta al administrador.</p>';
+}
 
 /* ------------------------------- NAVEGACIÓN ------------------------------- */
 function mostrarModulo(id) {
-  if (!estado.modulos.includes(id)) return; // seguridad extra en el cliente (el servidor también valida)
+  if (id !== 'menu' && !estado.modulos.includes(id)) return; // seguridad extra en el cliente (el servidor también valida)
   detenerRefrescoMeta();
   estado.moduloActivo = id;
   document.querySelectorAll('.modulo').forEach((s) => s.classList.add('hidden'));
+  $('vista-menu').classList.toggle('hidden', id !== 'menu');
+
+  // La barra "← Menú principal" solo aparece dentro de un módulo y si el rol tiene más de uno
+  const deMenu = estado.modulos.filter((m) => m !== 'modificar');
+  $('navbar').classList.toggle('hidden', id === 'menu' || deMenu.length <= 1);
+  if (id === 'menu') { renderMenu(); return; }
+
   $(MODULOS[id].seccion).classList.remove('hidden');
-  document.querySelectorAll('.nav-btn').forEach((b) => {
-    const activo = b.dataset.modulo === id;
-    b.classList.toggle('bg-white', activo); b.classList.toggle('text-navy', activo);
-    b.classList.toggle('text-white/80', !activo);
-    b.setAttribute('aria-current', activo ? 'page' : 'false');
-  });
+  $('nav-titulo').textContent = MODULOS[id].etiqueta;
   if (id === 'registro') { prepararFormularioRegistro(); $('reg-nombre').focus(); }
   if (id === 'kit') { $('kit-buscar').focus(); if (!$('kit-resultados').innerHTML) vacio('kit-resultados'); }
-  if (id === 'modificar') { $('mod-buscar').focus(); if (!$('mod-resultados').innerHTML) vacio('mod-resultados'); }
   if (id === 'meta') abrirMeta();
   if (id === 'reportes') { cargarRegistros(); cargarResumen(); }
 }
@@ -678,6 +715,7 @@ async function cargarListas() {
 
 /* ============== MÓDULO 1: REGISTRO, VENTA E INSCRIPCIÓN ============== */
 async function prepararFormularioRegistro() {
+  configurarPanelModificar();                    // muestra/oculta el botón "Buscar y modificar" según el rol
   if (!estado.listas) await cargarListas();      // reintenta si falló la carga inicial
   const l = estado.listas || { facultades: [], categorias: [], ramas: [], tallas: [] };
   const sel = $('reg-facultad-select'), fija = $('reg-facultad-fija');
@@ -816,7 +854,30 @@ $('btn-kit-confirmar').addEventListener('click', async () => {
   });
 });
 
-/* ================= MÓDULO 3: BÚSQUEDA Y MODIFICACIÓN ================= */
+/* ========= BÚSQUEDA Y MODIFICACIÓN (panel desplegable dentro de Registro y venta) ========= */
+/** El botón solo existe para roles con permiso 'modificar' (admin / umgpb); el panel inicia cerrado. */
+function configurarPanelModificar() {
+  const btn = $('btn-toggle-modificar');
+  btn.classList.toggle('hidden', !estado.modulos.includes('modificar'));
+  $('panel-modificar').classList.add('hidden');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.textContent = 'Buscar y modificar';
+}
+/** Despliega u oculta el panel de búsqueda y modificación. */
+$('btn-toggle-modificar').addEventListener('click', () => {
+  const btn = $('btn-toggle-modificar'), panel = $('panel-modificar');
+  const abrir = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !abrir);
+  btn.setAttribute('aria-expanded', String(abrir));
+  btn.textContent = abrir ? 'Ocultar búsqueda' : 'Buscar y modificar';
+  if (abrir) {
+    if (!$('mod-resultados').innerHTML) vacio('mod-resultados');
+    $('mod-buscar').focus();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+});
+
+/* ================= MÓDULO: BÚSQUEDA Y MODIFICACIÓN ================= */
 conectarBusqueda($('mod-buscar'), 'mod-resultados', (lista) => {
   estado.resMod = lista; estado.seleccionMod = -1; renderResultadosMod();
 });
@@ -1176,8 +1237,10 @@ async function cargarRegistros() {
 /** Filtro en tiempo real por nombre o No. Corredor (columnas E y D). */
 function filtrarRegistros() {
   const q = norm($('rep-buscar').value);
+  const qNum = /^\d+$/.test(q) ? Number(q) : null; // si se escribe un número, "001" y "1" cuentan como el mismo
   estado.filtrados = !q ? estado.registros : estado.registros.filter((f) =>
-    norm(f[4]).includes(q) || norm(f[3]) === q || norm(f[3]).startsWith(q));
+    norm(f[4]).includes(q) || norm(f[3]).startsWith(q) ||
+    (qNum !== null && /^\d+$/.test(String(f[3]).trim()) && Number(f[3]) === qNum));
   renderTablaRegistros();
 }
 let tFiltro = null;
@@ -1265,9 +1328,9 @@ $('btn-pdf').addEventListener('click', () => {
 $('btn-xlsx').addEventListener('click', () => {
   if (!window.XLSX) { toast('La librería de Excel no cargó. Revisa tu conexión.', 'error'); return; }
   if (!estado.filtrados.length) { toast('No hay datos para exportar.', 'error'); return; }
-  // Las columnas No. Corredor (3), Costo (5) y Posición (14) se guardan como número
+  // Costo (5) y Posición (14) se guardan como número; el No. Corredor (3) se queda como texto para conservar ceros (001)
   const filas = estado.filtrados.map((f) => f.map((v, i) => {
-    if ([3, 5, 14].includes(i) && String(v).trim() !== '') { const n = aNumero(v); return isNaN(n) ? v : n; }
+    if ([5, 14].includes(i) && String(v).trim() !== '') { const n = aNumero(v); return isNaN(n) ? v : n; }
     return v;
   }));
   const hoja = XLSX.utils.aoa_to_sheet([estado.encabezados, ...filas]);
