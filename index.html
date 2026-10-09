@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carrera 5K · UMG Puerto Barrios</title>
+
+  <!-- Tipografía -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS vía CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Paleta y tipografía propias del sistema (navy institucional)
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { navy: { DEFAULT: '#0B2447', 700: '#071A35', 50: '#E8EDF6' } },
+          fontFamily: { sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+
+  <!-- Librerías de exportación (versiones fijas) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Clases reutilizables (componentes) -->
+  <style type="text/tailwindcss">
+    @layer components {
+      .campo { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-black placeholder-slate-400 focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-slate-100; }
+      .etiqueta { @apply mb-1 block text-sm font-semibold text-black; }
+      .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50; }
+      .btn-navy { @apply bg-navy text-white hover:bg-navy-700 focus:ring-navy; }
+      .btn-claro { @apply border border-slate-300 bg-white text-black hover:bg-slate-50 focus:ring-slate-400; }
+      .btn-verde { @apply bg-emerald-700 text-white hover:bg-emerald-800 focus:ring-emerald-600; }
+      .btn-rojo { @apply bg-red-700 text-white hover:bg-red-800 focus:ring-red-600; }
+      .tarjeta { @apply rounded-2xl bg-white p-5 text-black shadow-sm ring-1 ring-slate-200 sm:p-6; }
+      .th { @apply whitespace-nowrap bg-navy px-3 py-2 text-left text-xs font-semibold text-white; }
+      .td { @apply px-3 py-2 text-sm text-black; }
+    }
+  </style>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+    .cifras { font-variant-numeric: tabular-nums; }
+    /* Sacudida breve para llamar la atención cuando un número ya fue vendido */
+    @keyframes sacudir { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
+    .sacudir { animation: sacudir .4s ease-in-out; }
+    @media (prefers-reduced-motion: reduce) { .sacudir { animation: none; } }
+  </style>
+</head>
+
+<body class="flex min-h-screen flex-col bg-[#F0F2F7] text-black antialiased">
+
+  <!-- ===================== ENCABEZADO (PAGE HEADER) ===================== -->
+  <header class="bg-navy text-white shadow-md">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+      <div class="flex items-center gap-3">
+        <span class="rounded-xl bg-white p-1">
+          <img src="https://i.ibb.co/gZzdHfR0/55-a-os-UMG-pb-sticker.png" alt="Logo UMG Puerto Barrios" class="h-12 w-auto">
+        </span>
+        <div>
+          <h1 class="text-lg font-bold leading-tight sm:text-xl">Carrera 5K UMG</h1>
+          <p class="text-xs text-white/70 sm:text-sm">Universidad Mariano Gálvez · Puerto Barrios</p>
+        </div>
+      </div>
+      <!-- Datos del usuario activo (visible solo con sesión iniciada) -->
+      <div id="info-usuario" class="hidden items-center gap-3 text-right">
+        <div class="text-sm">
+          <p id="usuario-nombre" class="font-semibold"></p>
+          <p id="usuario-detalle" class="text-xs text-white/70"></p>
+        </div>
+        <button id="btn-salir" type="button" class="btn btn-claro !py-1.5 text-sm">Salir</button>
+      </div>
+    </div>
+    <!-- Barra de navegación (se llena por JS según el rol) -->
+    <nav id="navbar" class="hidden border-t border-white/10 bg-navy-700" aria-label="Módulos">
+      <div id="navbar-items" class="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2"></div>
+    </nav>
+  </header>
+
+  <!-- ============================ CONTENIDO ============================= -->
+  <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+
+    <!-- ---------- LOGIN ---------- -->
+    <section id="vista-login" class="mx-auto mt-6 max-w-md">
+      <div class="tarjeta">
+        <h2 class="text-xl font-bold">Iniciar sesión</h2>
+        <p class="mt-1 text-sm text-slate-700">Ingresa con el usuario que te asignó la organización.</p>
+        <form id="form-login" class="mt-5 space-y-4" novalidate>
+          <div>
+            <label for="login-usuario" class="etiqueta">Usuario</label>
+            <input id="login-usuario" type="text" class="campo" autocomplete="username" autocapitalize="none" required>
+          </div>
+          <div>
+            <label for="login-password" class="etiqueta">Contraseña</label>
+            <input id="login-password" type="password" class="campo" autocomplete="current-password" required>
+          </div>
+          <div id="login-alerta" class="hidden"></div>
+          <button id="btn-login" type="submit" class="btn btn-navy w-full">Ingresar</button>
+        </form>
+        <button id="btn-abrir-cambio" type="button" class="mt-4 w-full text-center text-sm font-semibold text-navy underline">Cambiar contraseña</button>
+      </div>
+    </section>
+
+    <!-- ---------- APLICACIÓN (tras iniciar sesión) ---------- -->
+    <div id="vista-app" class="hidden">
+
+      <!-- MÓDULO 1: REGISTRO, VENTA E INSCRIPCIÓN -->
+      <section id="mod-registro" class="modulo hidden">
+        <div class="tarjeta mx-auto max-w-3xl">
+          <h2 class="text-xl font-bold">Registro, venta e inscripción</h2>
+          <p class="mt-1 text-sm text-slate-700">Cada número de corredor solo puede venderse una vez.</p>
+          <form id="form-registro" class="mt-5 grid gap-4 sm:grid-cols-2" novalidate>
+            <div class="sm:col-span-2">
+              <label for="reg-nombre" class="etiqueta">Nombre completo</label>
+              <input id="reg-nombre" type="text" class="campo" autocomplete="off" required>
+            </div>
+            <div>
+              <label for="reg-dorsal" class="etiqueta">No. Corredor (dorsal físico)</label>
+              <input id="reg-dorsal" type="text" inputmode="numeric" class="campo cifras" autocomplete="off" required>
+            </div>
+            <div>
+              <label for="reg-costo" class="etiqueta">Costo (Q)</label>
+              <input id="reg-costo" type="number" min="0" step="0.01" inputmode="decimal" class="campo cifras" required>
+            </div>
+            <div class="sm:col-span-2">
+              <label for="reg-facultad-select" class="etiqueta">Facultad</label>
+              <!-- Select para admin/umgpb; input bloqueado para el resto de roles -->
+              <select id="reg-facultad-select" class="campo hidden"></select>
+              <input id="reg-facultad-fija" type="text" class="campo hidden" readonly>
+            </div>
+            <div>
+              <label for="reg-categoria" class="etiqueta">Categoría</label>
+              <select id="reg-categoria" class="campo" required></select>
+            </div>
+            <div>
+              <label for="reg-rama" class="etiqueta">Rama</label>
+              <select id="reg-rama" class="campo" required></select>
+            </div>
+            <div>
+              <label for="reg-talla" class="etiqueta">Talla</label>
+              <select id="reg-talla" class="campo" required></select>
+            </div>
+            <div class="sm:col-span-2 space-y-3">
+              <div id="reg-alerta" class="hidden"></div>
+              <button id="btn-registrar" type="submit" class="btn btn-navy w-full sm:w-auto">Guardar inscripción</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- MÓDULO 2: ENTREGA DE KITS -->
+      <section id="mod-kit" class="modulo hidden">
+        <div class="tarjeta mx-auto max-w-3xl">
+          <h2 class="text-xl font-bold">Check-in y entrega de kits</h2>
+          <label for="kit-buscar" class="etiqueta mt-4">Buscar por nombre completo o No. Corredor</label>
+          <input id="kit-buscar" type="search" class="campo" placeholder="Ej. 125 o María López" autocomplete="off">
+          <div id="kit-resultados" class="mt-4 space-y-3"></div>
+        </div>
+      </section>
+
+      <!-- MÓDULO 3: BÚSQUEDA Y MODIFICACIÓN -->
+      <section id="mod-modificar" class="modulo hidden">
+        <div class="tarjeta mx-auto max-w-3xl">
+          <h2 class="text-xl font-bold">Búsqueda y modificación de datos</h2>
+          <p class="mt-1 text-sm text-slate-700">Busca al corredor, selecciónalo y presiona Modificar.</p>
+          <label for="mod-buscar" class="etiqueta mt-4">Buscar por nombre completo o No. Corredor</label>
+          <input id="mod-buscar" type="search" class="campo" autocomplete="off">
+          <div id="mod-resultados" class="mt-4 space-y-3"></div>
+          <button id="btn-modificar" type="button" class="btn btn-navy mt-4" disabled>Modificar</button>
+        </div>
+      </section>
+
+      <!-- MÓDULO 4: CONTROL DE META -->
+      <section id="mod-meta" class="modulo hidden">
+        <div class="mx-auto max-w-3xl space-y-5">
+          <div class="tarjeta text-center">
+            <h2 class="text-xl font-bold">Control de meta</h2>
+            <p id="meta-estado" class="mt-1 text-sm text-slate-700">Cargando estado de la carrera…</p>
+            <!-- Cronómetro en pantalla -->
+            <p id="crono" class="cifras mt-3 hidden text-5xl font-extrabold text-navy sm:text-6xl">00:00:00.000</p>
+            <p id="meta-reloj" class="mt-2 hidden text-sm font-semibold text-amber-800"></p>
+
+            <!-- Inicio de la carrera -->
+            <div id="meta-inicio" class="mt-5 hidden space-y-3">
+              <label class="flex items-center justify-center gap-2 text-sm font-semibold">
+                <input id="meta-listo" type="checkbox" class="h-5 w-5 accent-[#0B2447]">
+                Todo listo para dar la salida
+              </label>
+              <button id="btn-iniciar" type="button" class="btn btn-verde w-full !py-5 text-2xl" disabled>¡INICIAR CARRERA!</button>
+            </div>
+            <div id="meta-sync" class="mt-4 hidden space-y-2">
+              <p class="text-sm font-semibold text-amber-800">La hora de salida aún no se guardó en el servidor.</p>
+              <button id="btn-reintentar-inicio" type="button" class="btn btn-claro">Reintentar ahora</button>
+            </div>
+          </div>
+
+          <!-- Captura manual -->
+          <div id="meta-captura" class="tarjeta hidden">
+            <label for="meta-dorsal" class="etiqueta text-base">Número del corredor que cruza la meta (presiona ENTER)</label>
+            <input id="meta-dorsal" type="text" inputmode="numeric" autocomplete="off" class="campo cifras !py-4 text-center text-3xl font-bold">
+            <p id="meta-ultima-captura" class="cifras mt-2 min-h-[1.5rem] text-center text-sm font-semibold text-navy"></p>
+            <div id="meta-cola" class="mt-3 space-y-2"></div>
+          </div>
+
+          <!-- Últimos 5 -->
+          <div class="tarjeta">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-lg font-bold">Últimos 5 corredores registrados</h3>
+              <p class="text-sm text-slate-700">En meta: <span id="meta-total" class="cifras font-bold text-black">0</span></p>
+            </div>
+            <div class="mt-3 overflow-x-auto rounded-lg ring-1 ring-slate-200">
+              <table class="w-full min-w-[480px]">
+                <thead><tr><th class="th">Pos.</th><th class="th">No.</th><th class="th">Nombre</th><th class="th">Tiempo</th></tr></thead>
+                <tbody id="meta-ultimos-body"></tbody>
+              </table>
+            </div>
+            <button id="btn-reiniciar-carrera" type="button" class="mt-4 hidden text-sm font-semibold text-red-700 underline">Reiniciar cronómetro (solo administrador)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MÓDULO 5: CONSULTAS, REPORTES Y RESUMEN -->
+      <section id="mod-reportes" class="modulo hidden space-y-6">
+        <div class="flex gap-2 text-sm font-semibold">
+          <a href="#rep-consultas" class="btn btn-claro !py-1.5">Consultas y exportación</a>
+          <a href="#rep-resumen" class="btn btn-claro !py-1.5">Resumen de carrera</a>
+        </div>
+
+        <!-- A) Consultas y exportación -->
+        <div id="rep-consultas" class="tarjeta scroll-mt-24">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex-1">
+              <h2 class="text-xl font-bold">Consultas y exportación</h2>
+              <label for="rep-buscar" class="etiqueta mt-3">Filtrar por nombre completo o No. Corredor</label>
+              <input id="rep-buscar" type="search" class="campo" autocomplete="off">
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btn-pdf" type="button" class="btn btn-rojo">Exportar a PDF</button>
+              <button id="btn-xlsx" type="button" class="btn btn-verde">Exportar a Excel (XLSX)</button>
+              <button id="btn-rep-actualizar" type="button" class="btn btn-claro">Actualizar</button>
+            </div>
+          </div>
+          <p id="rep-conteo" class="mt-3 text-sm text-slate-700"></p>
+          <div class="mt-2 max-h-[60vh] overflow-auto rounded-lg ring-1 ring-slate-200">
+            <table class="w-full min-w-[1200px]">
+              <thead id="rep-tabla-head" class="sticky top-0"></thead>
+              <tbody id="rep-tabla-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- B) Resumen de carrera -->
+        <div id="rep-resumen" class="space-y-4 scroll-mt-24">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">Resumen de la carrera 5K</h2>
+            <button id="btn-res-actualizar" type="button" class="btn btn-claro">Actualizar resumen</button>
+          </div>
+          <div id="res-kpis" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"></div>
+          <div id="res-tablas" class="grid gap-4 lg:grid-cols-3"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ===================== VENTANAS EMERGENTES (MODALES) ===================== -->
+
+  <!-- Cambiar contraseña -->
+  <div id="modal-clave" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="titulo-clave">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 text-black shadow-xl">
+      <h3 id="titulo-clave" class="text-lg font-bold">Cambiar contraseña</h3>
+      <form id="form-clave" class="mt-4 space-y-3" novalidate>
+        <div><label for="cl-usuario" class="etiqueta">Usuario</label><input id="cl-usuario" type="text" class="campo" autocomplete="username" autocapitalize="none"></div>
+        <div><label for="cl-actual" class="etiqueta">Contraseña actual</label><input id="cl-actual" type="password" class="campo" autocomplete="current-password"></div>
+        <div><label for="cl-nueva" class="etiqueta">Nueva contraseña</label><input id="cl-nueva" type="password" class="campo" autocomplete="new-password"></div>
+        <div><label for="cl-confirmar" class="etiqueta">Confirmar nueva contraseña</label><input id="cl-confirmar" type="password" class="campo" autocomplete="new-password"></div>
+        <div id="cl-alerta" class="hidden"></div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" class="btn btn-claro" data-cerrar-modal="modal-clave">Cancelar</button>
+          <button id="btn-cambiar-clave" type="submit" class="btn btn-navy">Cambiar contraseña</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirmar entrega de kit -->
+  <div id="modal-kit" class="modal hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="titulo-kit">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 text-black shadow-xl">
+      <h3 id="titulo-kit" class="text-lg font-bold">Confirmar entrega de kit</h3>
+      <dl class="mt-4 space-y-3">
+        <div><dt class="text-sm text-slate-700">Corredor</dt><dd id="kit-m-nombre" class="text-lg font-bold"></dd></div>
+        <div class="flex gap-8">
+          <div><dt class="text-sm text-slate-700">No. asignado</dt><dd id="kit-m-dorsal" class="cifras text-3xl font-extrabold text-navy"></dd></div>
+          <div><dt class="text-sm text-slate-700">Talla</dt><dd id="kit-m-talla" class="text-3xl font-extrabold text-navy"></dd></div>
+        </div>
+        <div><dt class="text-sm text-slate-700">Facultad</dt><dd id="kit-m-facultad" class="font-semibold"></dd></div>
+      </dl>
+      <div id="kit-m-alerta" class="mt-3 hidden"></div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="btn btn-claro" data-cerrar-modal="modal-kit">Cancelar</button>
+        <button id="btn-kit-confirmar" type="button" class="btn btn-verde">Confirmar entrega</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editar corredor -->
+  <div id="modal-editar" class="modal hidden fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="titulo-editar">
+    <div class="my-6 w-full max-w-xl rounded-2xl bg-white p-6 text-black shadow-xl">
+      <h3 id="titulo-editar" class="text-lg font-bold">Modificar datos del corredor</h3>
+      <form id="form-editar" class="mt-4 grid gap-3 sm:grid-cols-2" novalidate>
+        <div class="sm:col-span-2"><label for="ed-nombre" class="etiqueta">Nombre completo</label><input id="ed-nombre" type="text" class="campo" autocomplete="off"></div>
+        <div><label for="ed-dorsal" class="etiqueta">No. Corredor</label><input id="ed-dorsal" type="text" inputmode="numeric" class="campo cifras" autocomplete="off"></div>
+        <div><label for="ed-costo" class="etiqueta">Costo (Q)</label><input id="ed-costo" type="number" min="0" step="0.01" class="campo cifras"></div>
+        <div class="sm:col-span-2"><label for="ed-facultad" class="etiqueta">Facultad</label><select id="ed-facultad" class="campo"></select></div>
+        <div><label for="ed-categoria" class="etiqueta">Categoría</label><select id="ed-categoria" class="campo"></select></div>
+        <div><label for="ed-rama" class="etiqueta">Rama</label><select id="ed-rama" class="campo"></select></div>
+        <div><label for="ed-talla" class="etiqueta">Talla</label><select id="ed-talla" class="campo"></select></div>
+        <div id="ed-alerta" class="hidden sm:col-span-2"></div>
+        <div class="flex justify-end gap-2 pt-1 sm:col-span-2">
+          <button type="button" class="btn btn-claro" data-cerrar-modal="modal-editar">Cancelar</button>
+          <button id="btn-actualizar" type="submit" class="btn btn-navy">Actualizar registro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Avisos flotantes (toasts) -->
+  <div id="toasts" class="pointer-events-none fixed right-4 top-4 z-[60] flex w-[min(92vw,22rem)] flex-col gap-2" aria-live="polite"></div>
+
+  <!-- ============================ PIE DE PÁGINA ============================ -->
+  <footer class="mt-8 border-t border-slate-300 bg-white py-4 text-center text-sm text-black">
+    <p>· Universidad Mariano Gálvez · Puerto Barrios, Izabal</p>
+    <p>© M.A. Inga. Delmy Valiente</p>
+  </footer>
+
+<script>
+'use strict';
+/* =============================================================================
+ *  LÓGICA DEL FRONTEND · Carrera 5K UMG Puerto Barrios
+ *  Todo se comunica con Google Apps Script mediante fetch() (ver función api()).
+ *  Aquí NO hay contraseñas ni datos sensibles: la validación ocurre en el servidor.
+ * ============================================================================= */
+
+/* ------------------------------ CONFIGURACIÓN ------------------------------ */
+const CONFIG = {
+  // *** PEGA AQUÍ la URL de tu implementación de Apps Script (termina en /exec) ***
+  API_URL: 'https://script.google.com/macros/s/PEGAR_AQUI_TU_ID_DE_IMPLEMENTACION/exec',
+  TIMEOUT_MS: 30000,          // tiempo máximo de espera por petición
+  CICLO_META_MS: 5000,        // cada cuánto se reintenta enviar lo pendiente en meta
+  REFRESCO_META_MS: 15000,    // cada cuánto se actualiza la tabla de últimos 5
+  LOGO_URL: 'https://i.ibb.co/gZzdHfR0/55-a-os-UMG-pb-sticker.png'
+};
+
+/** Módulos disponibles: etiqueta del menú y sección que se muestra. */
+const MODULOS = {
+  registro:  { etiqueta: 'Registro y venta',      seccion: 'mod-registro' },
+  kit:       { etiqueta: 'Entrega de kits',       seccion: 'mod-kit' },
+  modificar: { etiqueta: 'Buscar y modificar',    seccion: 'mod-modificar' },
+  meta:      { etiqueta: 'Control de meta',       seccion: 'mod-meta' },
+  reportes:  { etiqueta: 'Consultas y reportes',  seccion: 'mod-reportes' }
+};
+
+/** Estado global de la aplicación (en memoria). */
+const estado = {
+  token: null, nombre: '', facultad: '', rol: '', usuario: '',
+  puedeElegirFacultad: false, modulos: [], moduloActivo: null,
+  listas: null,                    // listas de los desplegables
+  resKit: [], resMod: [], seleccionMod: -1,
+  encabezados: [], registros: [], filtrados: [],
+  logo: null                       // logo en base64 para el PDF (si se pudo cargar)
+};
+
+/** Estado del módulo de meta. */
+const meta = {
+  inicioMs: null, sincronizado: false,
+  cola: [], procesando: false, ultimos: [],
+  timerCrono: null, timerCiclo: null, timerRefresco: null
+};
+
+/* -------------------------------- UTILIDADES -------------------------------- */
+const $ = (id) => document.getElementById(id);
+
+/** Escapa texto para insertarlo de forma segura en HTML. */
+function esc(t) {
+  return String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+/** Minúsculas y sin tildes (para búsquedas). */
+function norm(t) {
+  return String(t === null || t === undefined ? '' : t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+const pad = (n, l = 2) => String(n).padStart(l, '0');
+
+/** Milisegundos -> hh:mm:ss.mmm */
+function fmtCrono(ms) {
+  ms = Math.max(0, Math.round(ms));
+  return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor((ms % 3600000) / 60000))}:${pad(Math.floor((ms % 60000) / 1000))}.${pad(ms % 1000, 3)}`;
+}
+/** Número -> "Q 1,250.00" */
+function fmtMoneda(n) {
+  return 'Q ' + Number(n || 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+/** Convierte un texto de monto en número. */
+function aNumero(t) {
+  const n = parseFloat(String(t === null || t === undefined ? '' : t).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+const SPINNER = '<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>';
+
+/** Muestra un aviso flotante. tipo: 'ok' | 'error' | 'info' */
+function toast(mensaje, tipo = 'info') {
+  const colores = {
+    ok: 'bg-emerald-700 text-white', error: 'bg-red-700 text-white', info: 'bg-navy text-white'
+  };
+  const div = document.createElement('div');
+  div.className = `pointer-events-auto rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ${colores[tipo] || colores.info}`;
+  div.textContent = mensaje;
+  $('toasts').appendChild(div);
+  setTimeout(() => div.remove(), tipo === 'error' ? 7000 : 4000);
+}
+
+/** Muestra una alerta dentro de un contenedor. tipo: 'error' | 'ok' | 'info' | 'aviso' */
+function alerta(idContenedor, mensaje, tipo = 'error') {
+  const estilos = {
+    error: 'border-red-300 bg-red-50 text-red-900',
+    ok: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    info: 'border-slate-300 bg-slate-50 text-black',
+    aviso: 'border-amber-300 bg-amber-50 text-amber-900'
+  };
+  const c = $(idContenedor);
+  c.className = `rounded-lg border px-3 py-2.5 text-sm font-semibold ${estilos[tipo] || estilos.error}`;
+  c.setAttribute('role', 'alert');
+  c.textContent = mensaje;
+}
+function ocultarAlerta(id) { const c = $(id); c.className = 'hidden'; c.textContent = ''; }
+
+/** Bloquea un botón mientras se ejecuta una acción asíncrona (evita doble envío). */
+async function conCarga(boton, textoCarga, funcion) {
+  if (boton.disabled) return;
+  const original = boton.innerHTML;
+  boton.disabled = true;
+  boton.innerHTML = `${SPINNER}<span>${esc(textoCarga)}</span>`;
+  try { return await funcion(); }
+  finally { boton.disabled = false; boton.innerHTML = original; }
+}
+
+/** Llena un <select> con una lista. Si 'actual' no está en la lista, se agrega para no perderlo. */
+function llenarSelect(select, items, placeholder, actual) {
+  const lista = Array.isArray(items) ? items.slice() : [];
+  if (actual && !lista.some((i) => norm(i) === norm(actual))) lista.unshift(actual);
+  select.innerHTML = `<option value="">${esc(placeholder)}</option>` +
+    lista.map((i) => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+  if (actual) {
+    const igual = lista.find((i) => norm(i) === norm(actual));
+    select.value = igual || '';
+  }
+}
+
+/* -------------------------------- MODALES -------------------------------- */
+const hayModalAbierto = () => !!document.querySelector('.modal:not(.hidden)');
+function abrirModal(id) {
+  const m = $(id);
+  m.classList.remove('hidden');
+  const primero = m.querySelector('input:not([readonly]), select, button');
+  if (primero) setTimeout(() => primero.focus(), 30);
+}
+function cerrarModal(id) {
+  $(id).classList.add('hidden');
+  if (estado.moduloActivo === 'meta') setTimeout(enfocarMeta, 50);
+}
+document.querySelectorAll('[data-cerrar-modal]').forEach((b) =>
+  b.addEventListener('click', () => cerrarModal(b.dataset.cerrarModal)));
+document.querySelectorAll('.modal').forEach((m) =>
+  m.addEventListener('mousedown', (e) => { if (e.target === m) cerrarModal(m.id); })); // clic fuera = cerrar
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal:not(.hidden)').forEach((m) => cerrarModal(m.id));
+});
+
+/* ---------------------------------- API ---------------------------------- */
+/** Error de red/servidor (no de lógica): sirve para saber cuándo reintentar. */
+class ErrorRed extends Error {}
+
+/**
+ * Envía una acción al backend. Devuelve el objeto JSON de respuesta.
+ * - Usa text/plain para evitar el "preflight" CORS con Apps Script.
+ * - Lanza ErrorRed si no hay conexión, hay tiempo agotado o la respuesta es inválida.
+ */
+async function api(accion, datos = {}) {
+  if (CONFIG.API_URL.includes('PEGAR_AQUI')) {
+    throw new Error('Falta configurar CONFIG.API_URL con la URL de tu Apps Script.');
+  }
+  const ctrl = new AbortController();
+  const temporizador = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+  try {
+    const resp = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ accion, token: estado.token, ...datos }),
+      signal: ctrl.signal
+    });
+    if (!resp.ok) throw new ErrorRed(`El servidor respondió con error (${resp.status}).`);
+    let data;
+    try { data = await resp.json(); }
+    catch (_) { throw new ErrorRed('Respuesta inválida del servidor. Verifica que la implementación tenga acceso para "Cualquier persona".'); }
+    if (data && data.sesionExpirada) cerrarSesionLocal(data.mensaje);
+    return data;
+  } catch (err) {
+    if (err instanceof ErrorRed) throw err;
+    if (err.name === 'AbortError') throw new ErrorRed('La solicitud tardó demasiado. Revisa tu conexión.');
+    if (err instanceof TypeError) throw new ErrorRed('Sin conexión con el servidor. Revisa tu internet.');
+    throw err;
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+/* ------------------------------ AUTENTICACIÓN ------------------------------ */
+const CLAVE_SESION = 'umg5k_sesion';
+
+/** Guarda en memoria y en sessionStorage los datos de la sesión (nunca la contraseña). */
+function guardarSesion(r) {
+  estado.token = r.token || estado.token;
+  estado.nombre = r.nombre; estado.facultad = r.facultad; estado.rol = r.rol; estado.usuario = r.usuario;
+  estado.puedeElegirFacultad = !!r.puedeElegirFacultad;
+  estado.modulos = r.modulos || [];
+  sessionStorage.setItem(CLAVE_SESION, JSON.stringify({
+    token: estado.token, nombre: estado.nombre, facultad: estado.facultad, rol: estado.rol,
+    usuario: estado.usuario, puedeElegirFacultad: estado.puedeElegirFacultad, modulos: estado.modulos
+  }));
+}
+
+/** Al abrir la página: si hay token guardado, se confirma con el servidor que siga vigente. */
+async function restaurarSesion() {
+  const texto = sessionStorage.getItem(CLAVE_SESION);
+  if (!texto) return;
+  try {
+    const guardada = JSON.parse(texto);
+    estado.token = guardada.token;
+    const r = await api('verSesion');
+    if (r.ok) { guardarSesion(r.sesion); await iniciarApp(); }
+    else cerrarSesionLocal();
+  } catch (err) {
+    // Sin conexión: se muestra el login y se conserva el token por si vuelve la señal
+    alerta('login-alerta', err.message, 'aviso');
+  }
+}
+
+/** Envío del formulario de login. */
+$('form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  ocultarAlerta('login-alerta');
+  const usuario = $('login-usuario').value.trim();
+  const password = $('login-password').value;
+  if (!usuario || !password) { alerta('login-alerta', 'Ingresa tu usuario y tu contraseña.'); return; }
+  await conCarga($('btn-login'), 'Verificando…', async () => {
+    try {
+      const r = await api('login', { usuario, password });
+      if (!r.ok) { alerta('login-alerta', r.mensaje); return; }
+      $('login-password').value = '';
+      guardarSesion(r);
+      await iniciarApp();
+    } catch (err) { alerta('login-alerta', err.message); }
+  });
+});
+
+/** Abre el modal de cambio de contraseña. */
+$('btn-abrir-cambio').addEventListener('click', () => {
+  $('form-clave').reset();
+  ocultarAlerta('cl-alerta');
+  $('cl-usuario').value = $('login-usuario').value.trim();
+  abrirModal('modal-clave');
+});
+
+/** Envío del cambio de contraseña. */
+$('form-clave').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  ocultarAlerta('cl-alerta');
+  const datos = {
+    usuario: $('cl-usuario').value.trim(), actual: $('cl-actual').value,
+    nueva: $('cl-nueva').value, confirmar: $('cl-confirmar').value
+  };
+  if (!datos.usuario || !datos.actual || !datos.nueva || !datos.confirmar) { alerta('cl-alerta', 'Completa todos los campos.'); return; }
+  if (datos.nueva !== datos.confirmar) { alerta('cl-alerta', 'La nueva contraseña y su confirmación no coinciden.'); return; }
+  await conCarga($('btn-cambiar-clave'), 'Guardando…', async () => {
+    try {
+      const r = await api('cambiarPassword', datos);
+      if (!r.ok) { alerta('cl-alerta', r.mensaje); return; }
+      cerrarModal('modal-clave');
+      $('login-usuario').value = datos.usuario;
+      $('login-password').value = '';
+      alerta('login-alerta', r.mensaje, 'ok');
+      $('login-password').focus();
+    } catch (err) { alerta('cl-alerta', err.message); }
+  });
+});
+
+/** Botón Salir. */
+$('btn-salir').addEventListener('click', async () => {
+  try { await api('logout'); } catch (_) { /* si falla la red igual se cierra localmente */ }
+  cerrarSesionLocal();
+});
+
+/** Limpia la sesión del navegador y vuelve a la pantalla de login. */
+function cerrarSesionLocal(mensaje) {
+  detenerMeta();
+  sessionStorage.removeItem(CLAVE_SESION);
+  estado.token = null; estado.modulos = []; estado.moduloActivo = null; estado.listas = null;
+  $('vista-app').classList.add('hidden');
+  $('vista-login').classList.remove('hidden');
+  $('navbar').classList.add('hidden');
+  $('info-usuario').classList.add('hidden'); $('info-usuario').classList.remove('flex');
+  document.querySelectorAll('.modulo').forEach((s) => s.classList.add('hidden'));
+  if (mensaje) alerta('login-alerta', mensaje, 'aviso'); else ocultarAlerta('login-alerta');
+}
+
+/** Prepara la interfaz tras un login correcto. */
+async function iniciarApp() {
+  $('vista-login').classList.add('hidden');
+  $('vista-app').classList.remove('hidden');
+  $('info-usuario').classList.remove('hidden'); $('info-usuario').classList.add('flex');
+  $('usuario-nombre').textContent = estado.nombre;
+  $('usuario-detalle').textContent = `${estado.facultad || '—'} · ${estado.rol}`;
+
+  // Menú: solo los módulos permitidos para el rol
+  $('navbar').classList.remove('hidden');
+  $('navbar-items').innerHTML = estado.modulos.map((m) =>
+    `<button type="button" data-modulo="${m}" class="nav-btn whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10">${esc(MODULOS[m].etiqueta)}</button>`).join('');
+
+  cargarCola();
+  cargarLogoParaPdf();
+  if (estado.modulos.includes('registro') || estado.modulos.includes('modificar')) await cargarListas();
+  if (estado.modulos.length) mostrarModulo(estado.modulos[0]);
+}
+$('navbar-items').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-modulo]');
+  if (b) mostrarModulo(b.dataset.modulo);
+});
+
+/* ------------------------------- NAVEGACIÓN ------------------------------- */
+function mostrarModulo(id) {
+  if (!estado.modulos.includes(id)) return; // seguridad extra en el cliente (el servidor también valida)
+  detenerRefrescoMeta();
+  estado.moduloActivo = id;
+  document.querySelectorAll('.modulo').forEach((s) => s.classList.add('hidden'));
+  $(MODULOS[id].seccion).classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach((b) => {
+    const activo = b.dataset.modulo === id;
+    b.classList.toggle('bg-white', activo); b.classList.toggle('text-navy', activo);
+    b.classList.toggle('text-white/80', !activo);
+    b.setAttribute('aria-current', activo ? 'page' : 'false');
+  });
+  if (id === 'registro') { prepararFormularioRegistro(); $('reg-nombre').focus(); }
+  if (id === 'kit') { $('kit-buscar').focus(); if (!$('kit-resultados').innerHTML) vacio('kit-resultados'); }
+  if (id === 'modificar') { $('mod-buscar').focus(); if (!$('mod-resultados').innerHTML) vacio('mod-resultados'); }
+  if (id === 'meta') abrirMeta();
+  if (id === 'reportes') { cargarRegistros(); cargarResumen(); }
+}
+
+/** Mensaje inicial de las listas de búsqueda. */
+function vacio(idContenedor, texto = 'Escribe un nombre o un número de corredor para buscar.') {
+  $(idContenedor).innerHTML = `<p class="rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-700">${esc(texto)}</p>`;
+}
+
+/* --------------------------- LISTAS DESPLEGABLES --------------------------- */
+async function cargarListas() {
+  try {
+    const r = await api('getDropdownData');
+    if (!r.ok) { toast(r.mensaje, 'error'); return; }
+    estado.listas = r;
+  } catch (err) { toast('No se pudieron cargar las listas: ' + err.message, 'error'); }
+}
+
+/* ============== MÓDULO 1: REGISTRO, VENTA E INSCRIPCIÓN ============== */
+async function prepararFormularioRegistro() {
+  if (!estado.listas) await cargarListas();      // reintenta si falló la carga inicial
+  const l = estado.listas || { facultades: [], categorias: [], ramas: [], tallas: [] };
+  const sel = $('reg-facultad-select'), fija = $('reg-facultad-fija');
+  if (estado.puedeElegirFacultad) {
+    // admin / UMG Puerto Barrios: puede elegir cualquier facultad
+    llenarSelect(sel, l.facultades, 'Selecciona la facultad');
+    sel.classList.remove('hidden'); fija.classList.add('hidden');
+  } else {
+    // Rol de una facultad específica: el valor queda bloqueado
+    fija.value = estado.facultad;
+    fija.classList.remove('hidden'); sel.classList.add('hidden');
+  }
+  llenarSelect($('reg-categoria'), l.categorias, 'Selecciona la categoría', $('reg-categoria').value);
+  llenarSelect($('reg-rama'), l.ramas, 'Selecciona la rama', $('reg-rama').value);
+  llenarSelect($('reg-talla'), l.tallas, 'Selecciona la talla', $('reg-talla').value);
+}
+
+$('form-registro').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  ocultarAlerta('reg-alerta');
+  $('reg-dorsal').classList.remove('ring-2', 'ring-red-600', 'border-red-600');
+
+  const datos = {
+    nombre: $('reg-nombre').value.trim(),
+    dorsal: $('reg-dorsal').value.trim(),
+    costo: $('reg-costo').value.trim(),
+    categoria: $('reg-categoria').value, rama: $('reg-rama').value, talla: $('reg-talla').value
+  };
+  if (estado.puedeElegirFacultad) datos.facultad = $('reg-facultad-select').value;
+
+  // Validación local rápida (el servidor valida de nuevo)
+  if (datos.nombre.length < 3) return alerta('reg-alerta', 'Ingresa el nombre completo del corredor.');
+  if (!/^\d{1,6}$/.test(datos.dorsal) || Number(datos.dorsal) < 1) return alerta('reg-alerta', 'El No. Corredor debe ser un número entero mayor a 0.');
+  if (datos.costo === '' || Number(datos.costo) < 0) return alerta('reg-alerta', 'Ingresa un costo válido.');
+  if (estado.puedeElegirFacultad && !datos.facultad) return alerta('reg-alerta', 'Selecciona la facultad.');
+  if (!datos.categoria || !datos.rama || !datos.talla) return alerta('reg-alerta', 'Selecciona categoría, rama y talla.');
+
+  await conCarga($('btn-registrar'), 'Guardando…', async () => {
+    try {
+      const r = await api('registrarCorredor', datos);
+      if (r.ok) {
+        toast(r.mensaje, 'ok');
+        // Se limpian los datos del corredor; se conserva el costo para agilizar la siguiente venta
+        $('reg-nombre').value = ''; $('reg-dorsal').value = '';
+        $('reg-categoria').value = ''; $('reg-rama').value = ''; $('reg-talla').value = '';
+        if (estado.puedeElegirFacultad) $('reg-facultad-select').value = '';
+        $('reg-nombre').focus();
+      } else if (r.codigo === 'DORSAL_DUPLICADO') {
+        // Alerta visual clara: el número ya fue vendido
+        alerta('reg-alerta', '⚠ ' + r.mensaje, 'error');
+        const caja = $('reg-alerta'); caja.classList.add('sacudir', '!text-base');
+        setTimeout(() => caja.classList.remove('sacudir'), 500);
+        $('reg-dorsal').classList.add('ring-2', 'ring-red-600', 'border-red-600');
+        $('reg-dorsal').focus(); $('reg-dorsal').select();
+        toast('Número ya vendido: ' + datos.dorsal, 'error');
+      } else {
+        alerta('reg-alerta', r.mensaje);
+      }
+    } catch (err) { alerta('reg-alerta', err.message); }
+  });
+});
+
+/* ======================= BUSCADORES (kit y modificar) ======================= */
+/** Conecta un cuadro de búsqueda con el backend (con espera de 350 ms y descarte de respuestas viejas). */
+function conectarBusqueda(input, idResultados, alRecibir) {
+  let temporizador = null, secuencia = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(temporizador);
+    const q = input.value.trim();
+    if (!q) { vacio(idResultados); alRecibir([]); return; }
+    $(idResultados).innerHTML = `<p class="flex items-center justify-center gap-2 py-4 text-sm text-slate-700">${SPINNER} Buscando…</p>`;
+    temporizador = setTimeout(async () => {
+      const mia = ++secuencia;
+      try {
+        const r = await api('buscarCorredores', { consulta: q });
+        if (mia !== secuencia) return; // llegó una búsqueda más nueva
+        if (!r.ok) { $(idResultados).innerHTML = ''; alerta(idResultados, r.mensaje); return; }
+        alRecibir(r.resultados);
+      } catch (err) {
+        if (mia !== secuencia) return;
+        $(idResultados).innerHTML = `<p class="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900">${esc(err.message)}</p>`;
+      }
+    }, 350);
+  });
+}
+
+/* ======================= MÓDULO 2: ENTREGA DE KITS ======================= */
+let corredorKit = null; // corredor seleccionado para entregar
+
+conectarBusqueda($('kit-buscar'), 'kit-resultados', (lista) => { estado.resKit = lista; renderResultadosKit(); });
+
+function renderResultadosKit() {
+  const c = $('kit-resultados');
+  if (!$('kit-buscar').value.trim()) { vacio('kit-resultados'); return; }
+  if (!estado.resKit.length) { vacio('kit-resultados', 'No se encontraron corredores con ese dato.'); return; }
+  c.innerHTML = estado.resKit.map((r, i) => `
+    <div class="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="font-bold">${esc(r.nombre)}</p>
+        <p class="text-sm text-slate-700"><span class="cifras font-semibold text-black">No. ${esc(r.dorsal)}</span> · ${esc(r.facultad)} · Talla ${esc(r.talla)}</p>
+        ${r.kit ? `<p class="mt-1 text-sm font-semibold text-emerald-800">Kit entregado el ${esc(r.kit)} por ${esc(r.registradorKit)}</p>` : ''}
+      </div>
+      ${r.kit
+        ? '<span class="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">Kit entregado</span>'
+        : `<button type="button" class="btn btn-navy" data-kit="${i}">Entregar kit</button>`}
+    </div>`).join('');
+}
+
+$('kit-resultados').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kit]');
+  if (!b) return;
+  corredorKit = estado.resKit[Number(b.dataset.kit)];
+  $('kit-m-nombre').textContent = corredorKit.nombre;
+  $('kit-m-dorsal').textContent = corredorKit.dorsal;
+  $('kit-m-talla').textContent = corredorKit.talla;
+  $('kit-m-facultad').textContent = corredorKit.facultad;
+  ocultarAlerta('kit-m-alerta');
+  abrirModal('modal-kit');
+});
+
+$('btn-kit-confirmar').addEventListener('click', async () => {
+  if (!corredorKit) return;
+  await conCarga($('btn-kit-confirmar'), 'Registrando…', async () => {
+    try {
+      const r = await api('entregarKit', { dorsal: corredorKit.dorsal });
+      if (r.ok) {
+        corredorKit.kit = r.kit; corredorKit.registradorKit = r.registradorKit; // actualiza la lista local
+        cerrarModal('modal-kit');
+        renderResultadosKit();
+        toast(r.mensaje, 'ok');
+      } else {
+        alerta('kit-m-alerta', r.mensaje);
+        if (r.codigo === 'KIT_YA_ENTREGADO') { $('kit-buscar').dispatchEvent(new Event('input')); } // refresca la lista
+      }
+    } catch (err) { alerta('kit-m-alerta', err.message); }
+  });
+});
+
+/* ================= MÓDULO 3: BÚSQUEDA Y MODIFICACIÓN ================= */
+conectarBusqueda($('mod-buscar'), 'mod-resultados', (lista) => {
+  estado.resMod = lista; estado.seleccionMod = -1; renderResultadosMod();
+});
+
+function renderResultadosMod() {
+  const c = $('mod-resultados');
+  $('btn-modificar').disabled = estado.seleccionMod < 0;
+  if (!$('mod-buscar').value.trim()) { vacio('mod-resultados'); return; }
+  if (!estado.resMod.length) { vacio('mod-resultados', 'No se encontraron corredores con ese dato.'); return; }
+  c.innerHTML = estado.resMod.map((r, i) => `
+    <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${i === estado.seleccionMod ? 'border-navy bg-navy-50 ring-2 ring-navy/30' : 'border-slate-200'}">
+      <input type="radio" name="sel-mod" value="${i}" class="mt-1 h-4 w-4 accent-[#0B2447]" ${i === estado.seleccionMod ? 'checked' : ''}>
+      <span>
+        <span class="block font-bold">${esc(r.nombre)}</span>
+        <span class="block text-sm text-slate-700"><span class="cifras font-semibold text-black">No. ${esc(r.dorsal)}</span> · ${esc(r.facultad)} · ${esc(r.categoria)} · ${esc(r.rama)} · Talla ${esc(r.talla)} · ${esc(fmtMoneda(aNumero(r.costo)))}</span>
+      </span>
+    </label>`).join('');
+}
+$('mod-resultados').addEventListener('change', (e) => {
+  if (e.target.name === 'sel-mod') { estado.seleccionMod = Number(e.target.value); renderResultadosMod(); }
+});
+
+$('btn-modificar').addEventListener('click', async () => {
+  const r = estado.resMod[estado.seleccionMod];
+  if (!r) return;
+  if (!estado.listas) await cargarListas();
+  const l = estado.listas || { facultades: [], categorias: [], ramas: [], tallas: [] };
+  // Se precarga el formulario con los datos actuales del corredor
+  $('ed-nombre').value = r.nombre;
+  $('ed-dorsal').value = r.dorsal;
+  $('ed-costo').value = aNumero(r.costo);
+  llenarSelect($('ed-facultad'), l.facultades, 'Selecciona la facultad', r.facultad);
+  llenarSelect($('ed-categoria'), l.categorias, 'Selecciona la categoría', r.categoria);
+  llenarSelect($('ed-rama'), l.ramas, 'Selecciona la rama', r.rama);
+  llenarSelect($('ed-talla'), l.tallas, 'Selecciona la talla', r.talla);
+  $('form-editar').dataset.dorsalOriginal = r.dorsal; // sirve para ubicar la fila en el servidor
+  ocultarAlerta('ed-alerta');
+  abrirModal('modal-editar');
+});
+
+$('form-editar').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  ocultarAlerta('ed-alerta');
+  const datos = {
+    dorsalOriginal: $('form-editar').dataset.dorsalOriginal,
+    nombre: $('ed-nombre').value.trim(), dorsal: $('ed-dorsal').value.trim(), costo: $('ed-costo').value.trim(),
+    facultad: $('ed-facultad').value, categoria: $('ed-categoria').value, rama: $('ed-rama').value, talla: $('ed-talla').value
+  };
+  if (datos.nombre.length < 3) return alerta('ed-alerta', 'Ingresa el nombre completo.');
+  if (!/^\d{1,6}$/.test(datos.dorsal) || Number(datos.dorsal) < 1) return alerta('ed-alerta', 'El No. Corredor debe ser un número entero mayor a 0.');
+  if (datos.costo === '' || Number(datos.costo) < 0) return alerta('ed-alerta', 'Ingresa un costo válido.');
+  if (!datos.facultad || !datos.categoria || !datos.rama || !datos.talla) return alerta('ed-alerta', 'Completa facultad, categoría, rama y talla.');
+
+  await conCarga($('btn-actualizar'), 'Actualizando…', async () => {
+    try {
+      const r = await api('modificarCorredor', datos);
+      if (!r.ok) { alerta('ed-alerta', (r.codigo === 'DORSAL_DUPLICADO' ? '⚠ ' : '') + r.mensaje); return; }
+      cerrarModal('modal-editar');
+      toast(r.mensaje, 'ok');
+      $('mod-buscar').value = datos.dorsal;                    // muestra el registro ya corregido
+      $('mod-buscar').dispatchEvent(new Event('input'));
+    } catch (err) { alerta('ed-alerta', err.message); }
+  });
+});
+
+/* ========================= MÓDULO 4: CONTROL DE META ========================= */
+const CLAVE_COLA = 'umg5k_cola_meta';
+const CLAVE_INICIO_PENDIENTE = 'umg5k_inicio_pendiente';
+
+/** Enfoca el cuadro de captura (si el módulo está activo y no hay ventanas abiertas). */
+function enfocarMeta() {
+  if (estado.moduloActivo === 'meta' && !hayModalAbierto() && !$('meta-captura').classList.contains('hidden')) $('meta-dorsal').focus();
+}
+
+/** Beep corto para errores (ayuda al juez si no está mirando la pantalla). */
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); osc.frequency.value = 330; osc.connect(ctx.destination);
+    osc.start(); setTimeout(() => { osc.stop(); ctx.close(); }, 250);
+  } catch (_) { /* si el navegador no permite audio, se ignora */ }
+}
+
+/** Entrada al módulo: consulta el estado, arranca los temporizadores y enfoca el input. */
+async function abrirMeta() {
+  $('btn-reiniciar-carrera').classList.toggle('hidden', !(estado.rol === 'admin' || estado.rol === 'umgpb'));
+  await cargarEstadoMeta();
+  detenerRefrescoMeta();
+  meta.timerRefresco = setInterval(() => { if (estado.moduloActivo === 'meta') cargarEstadoMeta(true); }, CONFIG.REFRESCO_META_MS);
+  if (!meta.timerCiclo) meta.timerCiclo = setInterval(cicloMeta, CONFIG.CICLO_META_MS);
+  renderCola(); renderUltimos(); enfocarMeta();
+}
+function detenerRefrescoMeta() { clearInterval(meta.timerRefresco); meta.timerRefresco = null; }
+function detenerMeta() {
+  detenerRefrescoMeta(); detenerCrono();
+  clearInterval(meta.timerCiclo); meta.timerCiclo = null;
+  meta.inicioMs = null; meta.sincronizado = false;
+}
+
+/** Consulta al servidor si la carrera ya inició y trae los últimos 5. 'silencioso' evita mensajes repetidos. */
+async function cargarEstadoMeta(silencioso = false) {
+  try {
+    const t0 = Date.now();
+    const r = await api('getEstadoCarrera');
+    const t1 = Date.now();
+    if (!r.ok) { if (!silencioso) toast(r.mensaje, 'error'); return; }
+
+    // Comprueba si el reloj de este dispositivo está desfasado respecto al servidor
+    const sesgo = r.servidorMs - (t0 + t1) / 2;
+    const aviso = $('meta-reloj');
+    if (Math.abs(sesgo) > 3000) {
+      aviso.textContent = `Atención: el reloj de este dispositivo difiere ${Math.round(Math.abs(sesgo) / 1000)} s del servidor. Activa la hora automática.`;
+      aviso.classList.remove('hidden');
+    } else aviso.classList.add('hidden');
+
+    if (r.iniciada) {
+      if (meta.inicioMs !== r.inicioMs) { meta.inicioMs = r.inicioMs; arrancarCrono(); }
+      meta.sincronizado = true;
+      sessionStorage.removeItem(CLAVE_INICIO_PENDIENTE);
+    } else {
+      // Si este dispositivo había iniciado pero no alcanzó a guardar, se recupera esa hora
+      const pendiente = Number(sessionStorage.getItem(CLAVE_INICIO_PENDIENTE) || 0);
+      if (pendiente && !meta.inicioMs) { meta.inicioMs = pendiente; meta.sincronizado = false; arrancarCrono(); }
+    }
+    meta.ultimos = r.ultimos || [];
+    $('meta-total').textContent = r.totalLlegadas;
+    actualizarUIMeta(); renderUltimos();
+  } catch (err) {
+    if (!silencioso) toast(err.message, 'error');
+    $('meta-estado').textContent = 'Sin conexión con el servidor. Se reintentará automáticamente.';
+  }
+}
+
+/** Muestra u oculta bloques según si la carrera está iniciada. */
+function actualizarUIMeta() {
+  const iniciada = !!meta.inicioMs;
+  $('meta-inicio').classList.toggle('hidden', iniciada);
+  $('meta-captura').classList.toggle('hidden', !iniciada);
+  $('crono').classList.toggle('hidden', !iniciada);
+  $('meta-sync').classList.toggle('hidden', !(iniciada && !meta.sincronizado));
+  $('meta-estado').textContent = iniciada
+    ? `Carrera en curso · salida a las ${new Date(meta.inicioMs).toLocaleTimeString('es-GT', { hour12: false })}`
+    : 'La carrera aún no ha iniciado.';
+  if (iniciada) enfocarMeta();
+}
+
+/** Cronómetro en pantalla (se actualiza cada 50 ms). */
+function arrancarCrono() {
+  detenerCrono();
+  const tick = () => { $('crono').textContent = fmtCrono(Date.now() - meta.inicioMs); };
+  tick();
+  meta.timerCrono = setInterval(tick, 50);
+}
+function detenerCrono() { clearInterval(meta.timerCrono); meta.timerCrono = null; }
+
+/* ---- Inicio de carrera ---- */
+$('meta-listo').addEventListener('change', (e) => { $('btn-iniciar').disabled = !e.target.checked; });
+
+$('btn-iniciar').addEventListener('click', async () => {
+  const inicioMs = Date.now();                       // hora exacta del clic (se captura antes de cualquier otra cosa)
+  sessionStorage.setItem(CLAVE_INICIO_PENDIENTE, String(inicioMs));
+  meta.inicioMs = inicioMs; meta.sincronizado = false;
+  arrancarCrono(); actualizarUIMeta();
+  await sincronizarInicio();
+});
+
+/** Envía la hora de salida al servidor (se puede reintentar sin perder la hora original). */
+async function sincronizarInicio() {
+  if (!meta.inicioMs) return;
+  try {
+    const r = await api('iniciarCarrera', { inicioMs: meta.inicioMs });
+    if (r.ok) {
+      meta.sincronizado = true; sessionStorage.removeItem(CLAVE_INICIO_PENDIENTE);
+      toast(r.mensaje, 'ok');
+    } else if (r.codigo === 'YA_INICIADA') {
+      // Otro dispositivo ya la había iniciado: se adopta la hora oficial
+      meta.inicioMs = r.inicioMs; meta.sincronizado = true; sessionStorage.removeItem(CLAVE_INICIO_PENDIENTE);
+      arrancarCrono(); toast(r.mensaje, 'info');
+    } else {
+      // Rechazo (ej. reloj desfasado): se revierte para no trabajar con una hora inválida
+      detenerCrono(); meta.inicioMs = null; sessionStorage.removeItem(CLAVE_INICIO_PENDIENTE);
+      toast(r.mensaje, 'error'); beep();
+    }
+  } catch (err) {
+    meta.sincronizado = false;
+    toast('No se pudo guardar la salida: ' + err.message + ' Se reintentará.', 'error');
+  }
+  actualizarUIMeta(); procesarCola();
+}
+$('btn-reintentar-inicio').addEventListener('click', () => conCarga($('btn-reintentar-inicio'), 'Enviando…', sincronizarInicio));
+
+/** Reinicio del cronómetro (solo administradores, solo si nadie ha llegado). */
+$('btn-reiniciar-carrera').addEventListener('click', async () => {
+  if (!confirm('¿Reiniciar el cronómetro? Solo es posible si aún no hay llegadas registradas.')) return;
+  if (!confirm('Confirma nuevamente: se borrará la hora de salida actual.')) return;
+  try {
+    const r = await api('reiniciarCarrera');
+    if (!r.ok) { toast(r.mensaje, 'error'); return; }
+    detenerCrono(); meta.inicioMs = null; meta.sincronizado = false;
+    $('meta-listo').checked = false; $('btn-iniciar').disabled = true;
+    toast(r.mensaje, 'ok'); actualizarUIMeta();
+  } catch (err) { toast(err.message, 'error'); }
+});
+
+/* ---- Captura de llegadas (ENTER) ---- */
+$('meta-dorsal').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const llegadaMs = Date.now();                      // *** hora exacta del ENTER ***
+  const input = e.target;
+  const texto = input.value.trim();
+  if (!texto) return;
+  if (!/^\d{1,6}$/.test(texto)) { toast('Escribe solo el número del corredor.', 'error'); beep(); input.select(); return; }
+  if (!meta.inicioMs) { toast('La carrera aún no ha iniciado.', 'error'); return; }
+
+  input.value = '';                                  // listo para el siguiente corredor sin tocar el mouse
+  const tiempoMs = llegadaMs - meta.inicioMs;
+  meta.cola.push({ id: `${llegadaMs}-${texto}`, dorsal: texto, llegadaMs, tiempoMs, estado: 'pendiente', mensaje: '' });
+  $('meta-ultima-captura').textContent = `Capturado: No. ${texto} · ${fmtCrono(tiempoMs)}`;
+  guardarCola(); renderCola(); procesarCola();
+});
+
+/* Mantiene el cursor siempre en el cuadro de captura */
+$('meta-dorsal').addEventListener('blur', () => {
+  setTimeout(() => {
+    if (estado.moduloActivo !== 'meta' || hayModalAbierto()) return;
+    const a = document.activeElement;
+    const esOtroCampo = a && ['INPUT', 'SELECT', 'TEXTAREA'].includes(a.tagName) && a.id !== 'meta-dorsal';
+    if (!esOtroCampo) enfocarMeta();
+  }, 30);
+});
+document.addEventListener('click', (e) => {
+  if (estado.moduloActivo === 'meta' && !hayModalAbierto() && !e.target.closest('input, select, textarea, a')) enfocarMeta();
+});
+
+/* ---- Cola de envío (evita perder tiempos si falla la red) ---- */
+function guardarCola() {
+  try { sessionStorage.setItem(CLAVE_COLA, JSON.stringify(meta.cola)); } catch (_) {}
+}
+function cargarCola() {
+  try {
+    const t = sessionStorage.getItem(CLAVE_COLA);
+    meta.cola = t ? JSON.parse(t).map((i) => (i.estado === 'enviando' ? { ...i, estado: 'pendiente' } : i)) : [];
+  } catch (_) { meta.cola = []; }
+}
+
+/** Envía uno por uno los registros pendientes. Si falla la red, se detiene y se reintenta luego. */
+async function procesarCola() {
+  if (meta.procesando) return;
+  if (meta.inicioMs && !meta.sincronizado) return;   // primero debe guardarse la hora de salida
+  meta.procesando = true;
+  try {
+    for (;;) {
+      const item = meta.cola.find((i) => i.estado === 'pendiente');
+      if (!item) break;
+      item.estado = 'enviando'; renderCola();
+      try {
+        const r = await api('registrarMeta', { dorsal: item.dorsal, llegadaMs: item.llegadaMs });
+        if (r.ok) {
+          meta.cola = meta.cola.filter((i) => i !== item);   // confirmado: sale de la cola
+          meta.ultimos = r.ultimos || meta.ultimos;
+          $('meta-total').textContent = r.totalLlegadas;
+          toast(`No. ${r.corredor.dorsal} · ${r.corredor.nombre} · Posición ${r.corredor.posicion}`, 'ok');
+        } else if (r.codigo === 'YA_REGISTRADO') {
+          item.estado = 'duplicado'; item.mensaje = r.mensaje; beep();
+        } else {
+          item.estado = 'error'; item.mensaje = r.mensaje; beep();
+        }
+      } catch (err) {
+        item.estado = 'pendiente'; item.mensaje = err.message; // error de red: se reintenta
+        break;
+      }
+      guardarCola(); renderCola(); renderUltimos();
+    }
+  } finally {
+    meta.procesando = false; guardarCola(); renderCola(); renderUltimos();
+  }
+}
+/** Ciclo automático: reintenta la hora de salida y la cola pendiente. */
+function cicloMeta() {
+  if (meta.inicioMs && !meta.sincronizado) sincronizarInicio();
+  else if (meta.cola.some((i) => i.estado === 'pendiente')) procesarCola();
+}
+
+/** Dibuja los registros en cola (pendientes o con problema). */
+function renderCola() {
+  const c = $('meta-cola');
+  if (!c) return;
+  c.innerHTML = meta.cola.map((i) => {
+    const hora = fmtCrono(i.tiempoMs);
+    if (i.estado === 'pendiente' || i.estado === 'enviando') {
+      return `<div class="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+        <span class="cifras">No. ${esc(i.dorsal)} · ${hora}</span>
+        <span>${i.estado === 'enviando' ? 'Enviando…' : 'Pendiente de enviar' + (i.mensaje ? ' (' + esc(i.mensaje) + ')' : '')}</span></div>`;
+    }
+    // error o duplicado: se permite corregir el número o descartar
+    return `<div class="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900" data-id="${esc(i.id)}">
+      <p class="cifras font-bold">No. ${esc(i.dorsal)} · ${hora}</p>
+      <p class="font-semibold">${esc(i.mensaje)}</p>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        ${i.estado === 'error' ? `<input type="text" inputmode="numeric" class="campo cifras !w-28 !py-1.5" placeholder="Número correcto" data-corr="${esc(i.id)}">
+        <button type="button" class="btn btn-navy !px-3 !py-1.5 text-sm" data-accion="reenviar" data-id="${esc(i.id)}">Reenviar</button>` : ''}
+        <button type="button" class="btn btn-claro !px-3 !py-1.5 text-sm" data-accion="descartar" data-id="${esc(i.id)}">Descartar</button>
+      </div></div>`;
+  }).join('');
+}
+$('meta-cola').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-accion]');
+  if (!b) return;
+  const item = meta.cola.find((i) => i.id === b.dataset.id);
+  if (!item) return;
+  if (b.dataset.accion === 'descartar') {
+    meta.cola = meta.cola.filter((i) => i !== item);
+  } else {
+    // Reenvía con el número corregido conservando la hora original de llegada
+    const campo = document.querySelector(`[data-corr="${CSS.escape(item.id)}"]`);
+    const nuevo = campo ? campo.value.trim() : '';
+    if (!/^\d{1,6}$/.test(nuevo)) { toast('Escribe el número correcto del corredor.', 'error'); return; }
+    item.dorsal = nuevo; item.estado = 'pendiente'; item.mensaje = '';
+  }
+  guardarCola(); renderCola(); procesarCola(); enfocarMeta();
+});
+$('meta-cola').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.dataset.corr) {
+    e.preventDefault();
+    const b = $('meta-cola').querySelector(`[data-accion="reenviar"][data-id="${CSS.escape(e.target.dataset.corr)}"]`);
+    if (b) b.click();
+  }
+});
+
+/** Tabla de los últimos 5 corredores confirmados por el servidor. */
+function renderUltimos() {
+  const cuerpo = $('meta-ultimos-body');
+  if (!meta.ultimos.length) {
+    cuerpo.innerHTML = '<tr><td colspan="4" class="td py-6 text-center text-slate-700">Aún no hay llegadas registradas.</td></tr>';
+    return;
+  }
+  cuerpo.innerHTML = meta.ultimos.map((u) => `
+    <tr class="border-t border-slate-100">
+      <td class="td cifras font-bold">${esc(u.posicion)}</td><td class="td cifras">${esc(u.dorsal)}</td>
+      <td class="td">${esc(u.nombre)}</td><td class="td cifras font-semibold">${esc(u.tiempo)}</td></tr>`).join('');
+}
+
+/* ==================== MÓDULO 5: CONSULTAS, REPORTES Y RESUMEN ==================== */
+
+/* ---- A) Consultas y exportación ---- */
+async function cargarRegistros() {
+  $('rep-conteo').textContent = 'Cargando registros…';
+  try {
+    const r = await api('getRegistros');
+    if (!r.ok) { $('rep-conteo').textContent = r.mensaje; return; }
+    estado.encabezados = r.encabezados; estado.registros = r.filas;
+    filtrarRegistros();
+  } catch (err) { $('rep-conteo').textContent = err.message; toast(err.message, 'error'); }
+}
+
+/** Filtro en tiempo real por nombre o No. Corredor (columnas E y D). */
+function filtrarRegistros() {
+  const q = norm($('rep-buscar').value);
+  estado.filtrados = !q ? estado.registros : estado.registros.filter((f) =>
+    norm(f[4]).includes(q) || norm(f[3]) === q || norm(f[3]).startsWith(q));
+  renderTablaRegistros();
+}
+let tFiltro = null;
+$('rep-buscar').addEventListener('input', () => { clearTimeout(tFiltro); tFiltro = setTimeout(filtrarRegistros, 150); });
+$('btn-rep-actualizar').addEventListener('click', (e) => conCarga(e.currentTarget, 'Actualizando…', cargarRegistros));
+
+function renderTablaRegistros() {
+  $('rep-tabla-head').innerHTML = '<tr>' + estado.encabezados.map((h) => `<th class="th">${esc(h)}</th>`).join('') + '</tr>';
+  $('rep-tabla-body').innerHTML = estado.filtrados.length
+    ? estado.filtrados.map((f) => '<tr class="hover:bg-slate-50">' + f.map((v) => `<td class="td">${esc(v)}</td>`).join('') + '</tr>').join('')
+    : `<tr><td colspan="${estado.encabezados.length || 15}" class="td py-8 text-center text-slate-700">No hay registros para mostrar.</td></tr>`;
+  $('rep-conteo').textContent = `Mostrando ${estado.filtrados.length} de ${estado.registros.length} corredores.`;
+}
+
+/** Intenta cargar el logo como imagen base64 para incluirlo en el PDF (si el servidor lo permite). */
+function cargarLogoParaPdf() {
+  if (estado.logo) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      estado.logo = { data: canvas.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight };
+    } catch (_) { estado.logo = null; }
+  };
+  img.onerror = () => { estado.logo = null; };       // si falla, el PDF se genera solo con texto
+  img.src = CONFIG.LOGO_URL;
+}
+
+/** Exportar a PDF (jsPDF + autoTable) con membrete UMG y paginación. */
+$('btn-pdf').addEventListener('click', () => {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('La librería de PDF no cargó. Revisa tu conexión.', 'error'); return; }
+  if (!estado.filtrados.length) { toast('No hay datos para exportar.', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  const ancho = doc.internal.pageSize.getWidth();
+  const alto = doc.internal.pageSize.getHeight();
+  const fecha = new Date().toLocaleString('es-GT');
+  const cab = ['Facultad', 'Categoría', 'Rama', 'No.', 'Nombre completo', 'Costo', 'Talla', 'Venta', 'Vendedor', 'Kit', 'Reg. kit', 'Salida', 'Llegada', 'Tiempo', 'Pos.'];
+
+  doc.autoTable({
+    head: [cab],
+    body: estado.filtrados,
+    startY: 74,
+    margin: { top: 74, left: 28, right: 28, bottom: 34 },
+    styles: { fontSize: 6, cellPadding: 2, overflow: 'linebreak', textColor: 0 },
+    headStyles: { fillColor: [11, 36, 71], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [240, 242, 247] },
+    columnStyles: { 3: { halign: 'center' }, 5: { halign: 'right' }, 14: { halign: 'center' } },
+    // Membrete que se dibuja en CADA página
+    didDrawPage: () => {
+      doc.setFillColor(11, 36, 71); doc.rect(0, 0, ancho, 58, 'F');
+      let x = 28;
+      if (estado.logo) {
+        const h = 40, w = h * estado.logo.w / estado.logo.h;
+        doc.setFillColor(255, 255, 255); doc.roundedRect(x - 3, 8, w + 6, h + 4, 4, 4, 'F');
+        doc.addImage(estado.logo.data, 'PNG', x, 10, w, h);
+        x += w + 16;
+      }
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+      doc.text('Universidad Mariano Gálvez · Puerto Barrios', x, 26);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      doc.text('Carrera 5K · Listado de corredores', x, 42);
+      doc.setFontSize(8);
+      doc.text(`Generado: ${fecha}`, ancho - 28, 26, { align: 'right' });
+      doc.text(`Registros: ${estado.filtrados.length}`, ancho - 28, 40, { align: 'right' });
+    }
+  });
+
+  // Pie de página con paginación en todas las hojas
+  const paginas = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= paginas; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8); doc.setTextColor(0, 0, 0);
+    doc.text('© M.A. Inga. Delmy Valiente', 28, alto - 16);
+    doc.text(`Página ${i} de ${paginas}`, ancho - 28, alto - 16, { align: 'right' });
+  }
+  doc.save(`Corredores_5K_UMG_${new Date().toISOString().slice(0, 10)}.pdf`);
+});
+
+/** Exportar a Excel (SheetJS) con datos limpios en formato tabular. */
+$('btn-xlsx').addEventListener('click', () => {
+  if (!window.XLSX) { toast('La librería de Excel no cargó. Revisa tu conexión.', 'error'); return; }
+  if (!estado.filtrados.length) { toast('No hay datos para exportar.', 'error'); return; }
+  // Las columnas No. Corredor (3), Costo (5) y Posición (14) se guardan como número
+  const filas = estado.filtrados.map((f) => f.map((v, i) => {
+    if ([3, 5, 14].includes(i) && String(v).trim() !== '') { const n = aNumero(v); return isNaN(n) ? v : n; }
+    return v;
+  }));
+  const hoja = XLSX.utils.aoa_to_sheet([estado.encabezados, ...filas]);
+  hoja['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 32 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Corredores');
+  XLSX.writeFile(libro, `Corredores_5K_UMG_${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
+
+/* ---- B) Resumen de carrera (dashboard) ---- */
+async function cargarResumen() {
+  $('res-kpis').innerHTML = `<p class="flex items-center gap-2 text-sm text-slate-700">${SPINNER} Calculando resumen…</p>`;
+  try {
+    const r = await api('getReportData');
+    if (!r.ok) { $('res-kpis').innerHTML = ''; toast(r.mensaje, 'error'); return; }
+    renderResumen(r);
+  } catch (err) {
+    $('res-kpis').innerHTML = `<p class="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900">${esc(err.message)}</p>`;
+  }
+}
+$('btn-res-actualizar').addEventListener('click', (e) => conCarga(e.currentTarget, 'Actualizando…', cargarResumen));
+
+function renderResumen(r) {
+  const tarjeta = (titulo, valor, detalle) => `
+    <div class="tarjeta">
+      <p class="text-sm font-semibold text-slate-700">${esc(titulo)}</p>
+      <p class="cifras mt-1 text-3xl font-extrabold text-navy">${esc(valor)}</p>
+      <p class="mt-1 text-sm text-slate-700">${esc(detalle)}</p>
+    </div>`;
+  const pend = r.kpis.vendidos - r.kpis.kits;
+  $('res-kpis').innerHTML =
+    tarjeta('Números vendidos', r.kpis.vendidos.toLocaleString('es-GT'), 'Inscritos con número asignado') +
+    tarjeta('Kits entregados', r.kpis.kits.toLocaleString('es-GT'), `${pend} pendientes de entrega`) +
+    tarjeta('Fondos recaudados', fmtMoneda(r.kpis.recaudado), 'Suma de la columna COSTO') +
+    tarjeta('Corredores en meta', r.kpis.llegadas.toLocaleString('es-GT'), 'Con tiempo registrado');
+
+  // Tabla de desglose con fila de totales
+  const tabla = (titulo, filas) => {
+    const tot = filas.reduce((a, f) => ({ total: a.total + f.total, kits: a.kits + f.kits, monto: a.monto + f.monto }), { total: 0, kits: 0, monto: 0 });
+    return `
+    <div class="tarjeta !p-0 overflow-hidden">
+      <h3 class="px-5 pt-5 text-lg font-bold">${esc(titulo)}</h3>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full">
+          <thead><tr><th class="th">Grupo</th><th class="th text-right">Inscritos</th><th class="th text-right">Kits</th><th class="th text-right">Recaudado</th></tr></thead>
+          <tbody class="divide-y divide-slate-100">
+            ${filas.length ? filas.map((f) => `<tr><td class="td">${esc(f.nombre)}</td><td class="td cifras text-right">${f.total}</td><td class="td cifras text-right">${f.kits}</td><td class="td cifras text-right">${esc(fmtMoneda(f.monto))}</td></tr>`).join('')
+              : '<tr><td colspan="4" class="td py-6 text-center text-slate-700">Sin datos.</td></tr>'}
+          </tbody>
+          <tfoot><tr class="bg-navy-50 font-bold"><td class="td">Total</td><td class="td cifras text-right">${tot.total}</td><td class="td cifras text-right">${tot.kits}</td><td class="td cifras text-right">${esc(fmtMoneda(tot.monto))}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  };
+  $('res-tablas').innerHTML = tabla('Por facultad', r.porFacultad) + tabla('Por categoría', r.porCategoria) + tabla('Por rama', r.porRama);
+}
+
+/* ------------------------------- ARRANQUE ------------------------------- */
+window.addEventListener('online', () => { if (estado.token) { toast('Conexión recuperada.', 'ok'); cicloMeta(); } });
+restaurarSesion(); // si ya había una sesión abierta en esta pestaña, se retoma
+</script>
+</body>
+</html>
