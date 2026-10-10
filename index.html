@@ -390,11 +390,20 @@
 /* ------------------------------ CONFIGURACIÓN ------------------------------ */
 const CONFIG = {
   // *** PEGA AQUÍ la URL de tu implementación de Apps Script (termina en /exec) ***
-  API_URL: 'https://script.google.com/macros/s/AKfycbwwwl-KITEzHYFfKF4f4_IBMZ8Ft-RyHyu9VwEcDH3xKNDlKuoa3k52yLsf463GSk0u/exec',
+  API_URL: 'https://script.google.com/macros/s/PEGAR_AQUI_TU_ID_DE_IMPLEMENTACION/exec',
   TIMEOUT_MS: 30000,          // tiempo máximo de espera por petición
   CICLO_META_MS: 5000,        // cada cuánto se reintenta enviar lo pendiente en meta
   REFRESCO_META_MS: 15000,    // cada cuánto se actualiza la tabla de últimos 5
-  LOGO_URL: 'https://i.ibb.co/gZzdHfR0/55-a-os-UMG-pb-sticker.png'
+  LOGO_URL: 'https://i.ibb.co/gZzdHfR0/55-a-os-UMG-pb-sticker.png',
+  // Iconos del menú: puede ser un emoji (ej. '✅') o la ruta de una imagen (ej. 'iconos/meta.png').
+  // Si la imagen no existe o el valor está vacío, la opción se muestra sin icono.
+  ICONOS: {
+    registro:   '🎟️',
+    kit:        '✅',
+    reportes:   '📋',
+    meta:       '🏁',
+    posiciones: '🏆'
+  }
 };
 
 /** Módulos disponibles: etiqueta del menú y sección que se muestra. */
@@ -697,6 +706,7 @@ function renderMenu() {
     const habilitado = estado.modulos.includes(m);
     return `
       <button type="button" data-modulo="${m}" ${habilitado ? '' : 'disabled'} class="tarjeta text-left transition focus:outline-none ${habilitado ? 'hover:shadow-md hover:ring-2 hover:ring-navy focus:ring-2 focus:ring-navy' : 'cursor-not-allowed opacity-40 grayscale'}">
+        ${iconoHtml(CONFIG.ICONOS[m])}
         <span class="block text-lg font-bold">${esc(info[m].etiqueta)}</span>
         <span class="mt-1 block text-sm text-slate-700">${esc(habilitado ? info[m].desc : 'No disponible para tu rol.')}</span>
       </button>`;
@@ -1509,6 +1519,15 @@ function padDorsal(valor) {
 ['reg-dorsal', 'ed-dorsal'].forEach((id) => {
   $(id).addEventListener('blur', () => { $(id).value = padDorsal($(id).value); });
 });
+
+/** Devuelve el HTML del icono: imagen si el valor es una ruta de archivo, o emoji en otro caso. */
+function iconoHtml(valor) {
+  if (!valor) return '';
+  if (/\.(png|jpe?g|svg|gif|webp)$/i.test(valor)) {
+    return `<img src="${esc(valor)}" alt="" class="mb-2 block h-12 w-12 object-contain" onerror="this.remove()">`;
+  }
+  return `<span class="mb-2 block text-4xl leading-none" aria-hidden="true">${esc(valor)}</span>`;
+}
 
 /* ------------------------------- ARRANQUE ------------------------------- */
 window.addEventListener('online', () => { if (estado.token) { toast('Conexión recuperada.', 'ok'); cicloMeta(); } });
