@@ -365,7 +365,7 @@
 /* ------------------------------ CONFIGURACIÓN ------------------------------ */
 const CONFIG = {
   // *** PEGA AQUÍ la URL de tu implementación de Apps Script (termina en /exec) ***
-  API_URL: 'https://script.google.com/macros/s/AKfycbwwwl-KITEzHYFfKF4f4_IBMZ8Ft-RyHyu9VwEcDH3xKNDlKuoa3k52yLsf463GSk0u/exec',
+  API_URL: 'https://script.google.com/macros/s/PEGAR_AQUI_TU_ID_DE_IMPLEMENTACION/exec',
   TIMEOUT_MS: 30000,          // tiempo máximo de espera por petición
   CICLO_META_MS: 5000,        // cada cuánto se reintenta enviar lo pendiente en meta
   REFRESCO_META_MS: 15000,    // cada cuánto se actualiza la tabla de últimos 5
@@ -383,7 +383,7 @@ const MODULOS = {
 
 /** Estado global de la aplicación (en memoria). */
 const estado = {
-  token: null, nombre: '', facultad: '', rol: '', usuario: '',
+  token: null, nombre: '', facultad: '', rol: '', roles: [], usuario: '',
   puedeElegirFacultad: false, modulos: [], moduloActivo: null,
   listas: null,                    // listas de los desplegables
   resKit: [], resMod: [], seleccionMod: -1,
@@ -542,11 +542,11 @@ const CLAVE_SESION = 'umg5k_sesion';
 /** Guarda en memoria y en sessionStorage los datos de la sesión (nunca la contraseña). */
 function guardarSesion(r) {
   estado.token = r.token || estado.token;
-  estado.nombre = r.nombre; estado.facultad = r.facultad; estado.rol = r.rol; estado.usuario = r.usuario;
+  estado.nombre = r.nombre; estado.facultad = r.facultad; estado.rol = r.rol; estado.roles = r.roles || []; estado.usuario = r.usuario;
   estado.puedeElegirFacultad = !!r.puedeElegirFacultad;
   estado.modulos = r.modulos || [];
   sessionStorage.setItem(CLAVE_SESION, JSON.stringify({
-    token: estado.token, nombre: estado.nombre, facultad: estado.facultad, rol: estado.rol,
+    token: estado.token, nombre: estado.nombre, facultad: estado.facultad, rol: estado.rol, roles: estado.roles,
     usuario: estado.usuario, puedeElegirFacultad: estado.puedeElegirFacultad, modulos: estado.modulos
   }));
 }
@@ -963,7 +963,7 @@ function beep() {
 
 /** Entrada al módulo: consulta el estado, arranca los temporizadores y enfoca el input. */
 async function abrirMeta() {
-  $('btn-reiniciar-carrera').classList.toggle('hidden', !(estado.rol === 'admin' || estado.rol === 'umgpb'));
+  $('btn-reiniciar-carrera').classList.toggle('hidden', !(estado.roles.includes('admin') || estado.roles.includes('umgpb')));
   await cargarEstadoMeta();
   detenerRefrescoMeta();
   meta.timerRefresco = setInterval(() => { if (estado.moduloActivo === 'meta') cargarEstadoMeta(true); }, CONFIG.REFRESCO_META_MS);
