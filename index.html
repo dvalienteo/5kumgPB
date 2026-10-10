@@ -210,6 +210,8 @@
               </label>
               <button id="btn-iniciar" type="button" class="btn btn-verde w-full !py-5 text-2xl" disabled>¡INICIAR CARRERA!</button>
             </div>
+            <button id="btn-detener" type="button" class="btn btn-rojo mt-4 hidden w-full !py-4 text-xl">DETENER CRONÓMETRO</button>
+            <p id="meta-detenida" class="mt-3 hidden text-sm font-bold text-red-800"></p>
             <div id="meta-sync" class="mt-4 hidden space-y-2">
               <p class="text-sm font-semibold text-amber-800">La hora de salida aún no se guardó en el servidor.</p>
               <button id="btn-reintentar-inicio" type="button" class="btn btn-claro">Reintentar ahora</button>
@@ -237,6 +239,29 @@
               </table>
             </div>
             <button id="btn-reiniciar-carrera" type="button" class="mt-4 hidden text-sm font-semibold text-red-700 underline">Reiniciar cronómetro (solo administrador)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MÓDULO: TABLA DE POSICIONES (espejo del cronómetro de control de meta) -->
+      <section id="mod-posiciones" class="modulo hidden">
+        <div class="grid gap-5 lg:grid-cols-[minmax(260px,1fr)_2fr]">
+          <div class="tarjeta text-center lg:self-start">
+            <h2 class="text-lg font-bold">Cronómetro</h2>
+            <p id="pos-crono" class="cifras mt-3 break-all text-4xl font-extrabold text-navy sm:text-5xl">00:00:00.000</p>
+            <p id="pos-estado" class="mt-3 text-sm text-slate-700">Esperando la salida…</p>
+          </div>
+          <div class="tarjeta">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-lg font-bold">Tabla de posiciones</h2>
+              <p class="text-sm text-slate-700">Llegadas: <span id="pos-total" class="cifras font-bold text-black">0</span></p>
+            </div>
+            <div class="mt-3 overflow-x-auto rounded-lg ring-1 ring-slate-200">
+              <table class="w-full min-w-[460px]">
+                <thead><tr><th class="th">Posición</th><th class="th">No. corredor</th><th class="th">Nombre</th><th class="th">Tiempo</th></tr></thead>
+                <tbody id="pos-body" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -365,7 +390,7 @@
 /* ------------------------------ CONFIGURACIÓN ------------------------------ */
 const CONFIG = {
   // *** PEGA AQUÍ la URL de tu implementación de Apps Script (termina en /exec) ***
-  API_URL: 'https://script.google.com/macros/s/AKfycbwwwl-KITEzHYFfKF4f4_IBMZ8Ft-RyHyu9VwEcDH3xKNDlKuoa3k52yLsf463GSk0u/exec',
+  API_URL: 'https://script.google.com/macros/s/PEGAR_AQUI_TU_ID_DE_IMPLEMENTACION/exec',
   TIMEOUT_MS: 30000,          // tiempo máximo de espera por petición
   CICLO_META_MS: 5000,        // cada cuánto se reintenta enviar lo pendiente en meta
   REFRESCO_META_MS: 15000,    // cada cuánto se actualiza la tabla de últimos 5
@@ -378,7 +403,8 @@ const MODULOS = {
   kit:       { etiqueta: 'Entrega de kits',       seccion: 'mod-kit' },
   modificar: { etiqueta: 'Buscar y modificar',    seccion: 'mod-modificar' },
   meta:      { etiqueta: 'Control de meta',       seccion: 'mod-meta' },
-  reportes:  { etiqueta: 'Consultas y reportes',  seccion: 'mod-reportes' }
+  reportes:  { etiqueta: 'Consultas y reportes',  seccion: 'mod-reportes' },
+  posiciones: { etiqueta: 'Tabla de posiciones', seccion: 'mod-posiciones' }
 };
 
 /** Estado global de la aplicación (en memoria). */
@@ -393,7 +419,7 @@ const estado = {
 
 /** Estado del módulo de meta. */
 const meta = {
-  inicioMs: null, sincronizado: false,
+  inicioMs: null, finMs: null, sincronizado: false,
   cola: [], procesando: false, ultimos: [],
   timerCrono: null, timerCiclo: null, timerRefresco: null
 };
@@ -625,6 +651,7 @@ $('btn-salir').addEventListener('click', async () => {
 /** Limpia la sesión del navegador y vuelve a la pantalla de login. */
 function cerrarSesionLocal(mensaje) {
   detenerMeta();
+  detenerPosiciones();
   sessionStorage.removeItem(CLAVE_SESION);
   estado.token = null; estado.modulos = []; estado.moduloActivo = null; estado.listas = null;
   $('vista-app').classList.add('hidden');
@@ -646,10 +673,7 @@ async function iniciarApp() {
   cargarCola();
   cargarLogoParaPdf();
   if (estado.modulos.includes('registro') || estado.modulos.includes('modificar')) await cargarListas();
-  // 'modificar' no es un botón del menú: se despliega dentro de Registro y venta
-  const deMenu = estado.modulos.filter((m) => m !== 'modificar');
-  if (deMenu.length === 1) mostrarModulo(deMenu[0]); // rol con un solo módulo: se abre directo
-  else mostrarModulo('menu');
+  mostrarModulo('menu'); // siempre se muestra el menú; los módulos de otros roles aparecen deshabilitados
 }
 
 /** Botones del menú principal (clic en una opción abre el módulo). */
@@ -662,33 +686,33 @@ $('btn-menu').addEventListener('click', () => mostrarModulo('menu'));
 
 /** Dibuja los botones del menú según los módulos permitidos al rol (orden fijo). */
 function renderMenu() {
-  const descripciones = {
-    registro: 'Inscribir corredores, vender números y corregir datos.',
-    kit: 'Buscar corredores y registrar la entrega del kit.',
-    reportes: 'Listados, exportación a PDF o Excel y resumen de la carrera.',
-    meta: 'Iniciar la carrera y registrar las llegadas.'
+  const info = {
+    registro:   { etiqueta: 'Registro y venta',     desc: 'Inscribir corredores, vender números y corregir datos.' },
+    kit:        { etiqueta: 'Entrega de kits',      desc: 'Buscar corredores y registrar la entrega del kit.' },
+    reportes:   { etiqueta: 'Consultas y reportes', desc: 'Listados, exportación a PDF o Excel y resumen de la carrera.' },
+    meta:       { etiqueta: 'Control de meta',      desc: 'Iniciar, detener el cronómetro y registrar las llegadas.' },
+    posiciones: { etiqueta: 'Tabla de posiciones',  desc: 'Cronómetro en vivo y posiciones de los corredores.' }
   };
-  const orden = ['registro', 'kit', 'reportes', 'meta'].filter((m) => estado.modulos.includes(m));
-  $('menu-botones').innerHTML = orden.length
-    ? orden.map((m) => `
-      <button type="button" data-modulo="${m}" class="tarjeta text-left transition hover:shadow-md hover:ring-navy focus:outline-none focus:ring-2 focus:ring-navy">
-        <span class="block text-lg font-bold">${esc(MODULOS[m].etiqueta)}</span>
-        <span class="mt-1 block text-sm text-slate-700">${esc(descripciones[m])}</span>
-      </button>`).join('')
-    : '<p class="tarjeta text-sm">Tu usuario no tiene módulos habilitados. Contacta al administrador.</p>';
+  $('menu-botones').innerHTML = Object.keys(info).map((m) => {
+    const habilitado = estado.modulos.includes(m);
+    return `
+      <button type="button" data-modulo="${m}" ${habilitado ? '' : 'disabled'} class="tarjeta text-left transition focus:outline-none ${habilitado ? 'hover:shadow-md hover:ring-2 hover:ring-navy focus:ring-2 focus:ring-navy' : 'cursor-not-allowed opacity-40 grayscale'}">
+        <span class="block text-lg font-bold">${esc(info[m].etiqueta)}</span>
+        <span class="mt-1 block text-sm text-slate-700">${esc(habilitado ? info[m].desc : 'No disponible para tu rol.')}</span>
+      </button>`;
+  }).join('');
 }
 
 /* ------------------------------- NAVEGACIÓN ------------------------------- */
 function mostrarModulo(id) {
   if (id !== 'menu' && !estado.modulos.includes(id)) return; // seguridad extra en el cliente (el servidor también valida)
   detenerRefrescoMeta();
+  detenerPosiciones();
   estado.moduloActivo = id;
   document.querySelectorAll('.modulo').forEach((s) => s.classList.add('hidden'));
   $('vista-menu').classList.toggle('hidden', id !== 'menu');
 
-  // La barra "← Menú principal" solo aparece dentro de un módulo y si el rol tiene más de uno
-  const deMenu = estado.modulos.filter((m) => m !== 'modificar');
-  $('navbar').classList.toggle('hidden', id === 'menu' || deMenu.length <= 1);
+  $('navbar').classList.toggle('hidden', id === 'menu');
   if (id === 'menu') { renderMenu(); return; }
 
   $(MODULOS[id].seccion).classList.remove('hidden');
@@ -697,6 +721,7 @@ function mostrarModulo(id) {
   if (id === 'kit') { $('kit-buscar').focus(); if (!$('kit-resultados').innerHTML) vacio('kit-resultados'); }
   if (id === 'meta') abrirMeta();
   if (id === 'reportes') { cargarRegistros(); cargarResumen(); }
+  if (id === 'posiciones') abrirPosiciones();
 }
 
 /** Mensaje inicial de las listas de búsqueda. */
@@ -740,7 +765,7 @@ $('form-registro').addEventListener('submit', async (e) => {
 
   const datos = {
     nombre: $('reg-nombre').value.trim(),
-    dorsal: $('reg-dorsal').value.trim(),
+    dorsal: padDorsal($('reg-dorsal').value.trim()),
     costo: $('reg-costo').value.trim(),
     categoria: $('reg-categoria').value, rama: $('reg-rama').value, talla: $('reg-talla').value
   };
@@ -923,7 +948,7 @@ $('form-editar').addEventListener('submit', async (e) => {
   ocultarAlerta('ed-alerta');
   const datos = {
     dorsalOriginal: $('form-editar').dataset.dorsalOriginal,
-    nombre: $('ed-nombre').value.trim(), dorsal: $('ed-dorsal').value.trim(), costo: $('ed-costo').value.trim(),
+    nombre: $('ed-nombre').value.trim(), dorsal: padDorsal($('ed-dorsal').value.trim()), costo: $('ed-costo').value.trim(),
     facultad: $('ed-facultad').value, categoria: $('ed-categoria').value, rama: $('ed-rama').value, talla: $('ed-talla').value
   };
   if (datos.nombre.length < 3) return alerta('ed-alerta', 'Ingresa el nombre completo.');
@@ -993,8 +1018,10 @@ async function cargarEstadoMeta(silencioso = false) {
       aviso.classList.remove('hidden');
     } else aviso.classList.add('hidden');
 
+    const finPrevio = meta.finMs;
+    meta.finMs = r.iniciada ? (r.finMs || null) : null; // hora de cierre (si ya se detuvo)
     if (r.iniciada) {
-      if (meta.inicioMs !== r.inicioMs) { meta.inicioMs = r.inicioMs; arrancarCrono(); }
+      if (meta.inicioMs !== r.inicioMs || finPrevio !== meta.finMs) { meta.inicioMs = r.inicioMs; arrancarCrono(); }
       meta.sincronizado = true;
       sessionStorage.removeItem(CLAVE_INICIO_PENDIENTE);
     } else {
@@ -1014,19 +1041,29 @@ async function cargarEstadoMeta(silencioso = false) {
 /** Muestra u oculta bloques según si la carrera está iniciada. */
 function actualizarUIMeta() {
   const iniciada = !!meta.inicioMs;
+  const detenida = iniciada && !!meta.finMs;
   $('meta-inicio').classList.toggle('hidden', iniciada);
   $('meta-captura').classList.toggle('hidden', !iniciada);
   $('crono').classList.toggle('hidden', !iniciada);
   $('meta-sync').classList.toggle('hidden', !(iniciada && !meta.sincronizado));
-  $('meta-estado').textContent = iniciada
-    ? `Carrera en curso · salida a las ${new Date(meta.inicioMs).toLocaleTimeString('es-GT', { hour12: false })}`
-    : 'La carrera aún no ha iniciado.';
+  $('btn-detener').classList.toggle('hidden', !iniciada || detenida);
+  $('meta-detenida').classList.toggle('hidden', !detenida);
+  if (detenida) {
+    $('meta-detenida').textContent = `Cronómetro detenido a las ${new Date(meta.finMs).toLocaleTimeString('es-GT', { hour12: false })}. Las llegadas se siguen registrando.`;
+  }
+  $('meta-estado').textContent = detenida
+    ? 'Carrera detenida'
+    : iniciada
+      ? `Carrera en curso · salida a las ${new Date(meta.inicioMs).toLocaleTimeString('es-GT', { hour12: false })}`
+      : 'La carrera aún no ha iniciado.';
   if (iniciada) enfocarMeta();
 }
 
 /** Cronómetro en pantalla (se actualiza cada 50 ms). */
 function arrancarCrono() {
   detenerCrono();
+  // Si la carrera ya fue detenida, el cronómetro queda congelado en el tiempo final
+  if (meta.finMs) { $('crono').textContent = fmtCrono(meta.finMs - meta.inicioMs); return; }
   const tick = () => { $('crono').textContent = fmtCrono(Date.now() - meta.inicioMs); };
   tick();
   meta.timerCrono = setInterval(tick, 50);
@@ -1076,7 +1113,7 @@ $('btn-reiniciar-carrera').addEventListener('click', async () => {
   try {
     const r = await api('reiniciarCarrera');
     if (!r.ok) { toast(r.mensaje, 'error'); return; }
-    detenerCrono(); meta.inicioMs = null; meta.sincronizado = false;
+    detenerCrono(); meta.inicioMs = null; meta.finMs = null; meta.sincronizado = false;
     $('meta-listo').checked = false; $('btn-iniciar').disabled = true;
     toast(r.mensaje, 'ok'); actualizarUIMeta();
   } catch (err) { toast(err.message, 'error'); }
@@ -1387,6 +1424,90 @@ function renderResumen(r) {
   };
   $('res-tablas').innerHTML = tabla('Por facultad', r.porFacultad) + tabla('Por categoría', r.porCategoria) + tabla('Por rama', r.porRama);
 }
+
+/* ============================== DETENER CRONÓMETRO ============================== */
+$('btn-detener').addEventListener('click', async () => {
+  if (!confirm('¿Detener el cronómetro de la carrera?')) return;
+  const finMs = Date.now();                          // hora exacta del clic
+  await conCarga($('btn-detener'), 'Deteniendo…', async () => {
+    try {
+      const r = await api('detenerCarrera', { finMs });
+      if (r.ok || r.codigo === 'YA_DETENIDA') {
+        meta.finMs = r.finMs;
+        arrancarCrono(); actualizarUIMeta();
+        toast(r.mensaje, r.ok ? 'ok' : 'info');
+      } else {
+        toast(r.mensaje, 'error');
+      }
+    } catch (err) { toast('No se pudo detener: ' + err.message, 'error'); }
+  });
+});
+
+/* ============================== TABLA DE POSICIONES (espejo) ============================== */
+const posMirror = { inicioMs: null, finMs: null, timerCrono: null, timerLista: null };
+
+/** Entrada al módulo: carga la tabla y refresca cada 3 s. */
+function abrirPosiciones() {
+  detenerPosiciones();
+  cargarPosiciones();
+  posMirror.timerLista = setInterval(() => {
+    if (estado.moduloActivo === 'posiciones') cargarPosiciones(true);
+  }, 3000);
+}
+function detenerPosiciones() {
+  clearInterval(posMirror.timerCrono); clearInterval(posMirror.timerLista);
+  posMirror.timerCrono = null; posMirror.timerLista = null;
+}
+
+/** Dibuja el cronómetro espejo con la hora de salida que guarda el servidor. */
+function dibujarCronoPos() {
+  if (!posMirror.inicioMs) { $('pos-crono').textContent = '00:00:00.000'; return; }
+  const fin = posMirror.finMs || Date.now();
+  $('pos-crono').textContent = fmtCrono(fin - posMirror.inicioMs);
+}
+function arrancarCronoPos() {
+  clearInterval(posMirror.timerCrono);
+  dibujarCronoPos();
+  if (!posMirror.finMs) posMirror.timerCrono = setInterval(dibujarCronoPos, 50); // congelado si ya se detuvo
+}
+
+/** Pide al servidor las posiciones y actualiza tabla y cronómetro. */
+async function cargarPosiciones(silencioso = false) {
+  try {
+    const r = await api('getPosiciones');
+    if (!r.ok) { if (!silencioso) toast(r.mensaje, 'error'); return; }
+
+    const cambio = posMirror.inicioMs !== r.inicioMs || posMirror.finMs !== r.finMs;
+    posMirror.inicioMs = r.inicioMs; posMirror.finMs = r.finMs;
+    if (cambio) arrancarCronoPos();
+
+    $('pos-estado').textContent = !r.iniciada ? 'Esperando la salida…'
+      : posMirror.finMs ? 'Carrera detenida' : 'Carrera en curso';
+    $('pos-total').textContent = r.posiciones.length;
+    $('pos-body').innerHTML = r.posiciones.length
+      ? r.posiciones.map((p) => `
+        <tr class="hover:bg-slate-50">
+          <td class="td cifras font-extrabold">${esc(p.posicion)}</td>
+          <td class="td cifras">${esc(p.dorsal)}</td>
+          <td class="td">${esc(p.nombre)}</td>
+          <td class="td cifras font-semibold">${esc(p.tiempo)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" class="td py-6 text-center text-slate-700">Aún no hay llegadas registradas.</td></tr>';
+  } catch (err) {
+    if (!silencioso) toast(err.message, 'error');
+  }
+}
+
+/* ============================== FORMATO DEL No. CORREDOR ============================== */
+/** Completa con ceros a la izquierda hasta 3 dígitos: "1" -> "001", "15" -> "015". Otros textos se dejan igual. */
+function padDorsal(valor) {
+  const s = String(valor === null || valor === undefined ? '' : valor).trim();
+  return /^\d{1,6}$/.test(s) && Number(s) > 0 ? s.padStart(3, '0') : s;
+}
+/** Al salir del campo, el número se muestra ya con sus ceros (ej. 15 -> 015). */
+['reg-dorsal', 'ed-dorsal'].forEach((id) => {
+  $(id).addEventListener('blur', () => { $(id).value = padDorsal($(id).value); });
+});
 
 /* ------------------------------- ARRANQUE ------------------------------- */
 window.addEventListener('online', () => { if (estado.token) { toast('Conexión recuperada.', 'ok'); cicloMeta(); } });
